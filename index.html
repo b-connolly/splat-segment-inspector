@@ -160,6 +160,15 @@ details.step[open] > summary::after { transform: rotate(90deg); }
   font-size: 11px; color: var(--ink-dim);
 }
 .rl { flex: 1; font-size: 12px; color: var(--ink-dim); }
+.item.ags {
+  grid-template-columns: 1fr auto;
+  border-left-width: 0; border-bottom: 1px solid var(--line-soft);
+  padding: 8px 10px;
+}
+.item.ags .h { font-weight: 500; }
+.item.ags .w { font-size: 11px; color: var(--ink-faint); }
+#agsSetup > summary { margin-bottom: 0; }
+#agsSetup[open] > summary { margin-bottom: 8px; }
 
 .classes { display: flex; flex-direction: column; gap: 2px; }
 .cls {
@@ -379,6 +388,9 @@ kbd {
         <button class="btn" type="button" id="railFile">Open file</button>
         <button class="btn" type="button" id="openUrl">3D Tiles URL</button>
       </div>
+      <div class="pair">
+        <button class="btn wide" type="button" id="railArcgis">Open from ArcGIS&hellip;</button>
+      </div>
       <p class="note" id="loadedNote">Nothing loaded yet.</p>
     </div>
 
@@ -553,6 +565,7 @@ kbd {
         <div class="acts">
           <button class="btn go" type="button" id="emptyFile">Open a file</button>
           <button class="btn" type="button" id="emptyUrl">Open 3D Tiles URL</button>
+          <button class="btn" type="button" id="emptyArcgis">ArcGIS content</button>
         </div>
         <p class="foot">A <code>.splatseg</code> bundle, a 3DGS <code>.ply</code>
            labelled or not, or a hosted <code>tileset.json</code>. Drop a file
@@ -593,6 +606,67 @@ kbd {
     <div class="acts" style="justify-content:flex-end">
       <button class="btn" type="button" id="classCancel">Cancel</button>
       <button class="btn go" type="button" id="classGo">Create and assign</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="agsDlg" style="border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);padding:20px;width:min(640px,92vw);box-shadow:var(--shadow)">
+  <form method="dialog" id="agsForm">
+    <h2 style="margin:0 0 4px;font-size:16px;font-weight:600">Open from ArcGIS</h2>
+    <p style="margin:0 0 12px;font-size:12px;color:var(--ink-dim)">
+      Sign in to your organization and open a hosted Gaussian splat layer from
+      your own content. The layer is decoded here in the browser, exactly as a
+      pasted URL would be; the sign-in only gets the page a token to fetch the
+      tiles with.
+    </p>
+
+    <details class="block" id="agsSetup" style="padding:12px 14px;border:1px solid var(--line);border-radius:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
+      <summary>One-time setup</summary>
+      <div>
+        <p class="note" style="margin-top:0">
+          Register an OAuth application in your organization
+          (<strong>Content &rarr; New item &rarr; Developer credentials &rarr;
+          OAuth 2.0</strong>) and give it this redirect URL. There is no client
+          secret: this is a public app using PKCE.
+        </p>
+        <div class="row">
+          <code class="mono" id="agsRedirect" style="flex:1;font-size:11px;overflow-x:auto;white-space:nowrap;background:var(--shell);padding:6px 8px;border-radius:4px;border:1px solid var(--line)"></code>
+          <button class="btn" type="button" id="agsCopyRedirect" style="flex:none">Copy</button>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <label for="agsPortal" style="flex:none;width:66px">Portal</label>
+          <input type="url" id="agsPortal" spellcheck="false"
+                 placeholder="https://www.arcgis.com">
+        </div>
+        <div class="row">
+          <label for="agsClient" style="flex:none;width:66px">Client id</label>
+          <input type="text" id="agsClient" spellcheck="false"
+                 placeholder="xxxxxxxxxxxxxxxx">
+        </div>
+        <p class="note">For ArcGIS Enterprise, put your portal address in
+          instead &mdash; <code>https://gis.example.com/portal</code>.</p>
+        <div class="pair">
+          <button class="btn" type="button" id="agsSave">Save</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="row">
+      <span class="rl" id="agsWho">Not signed in.</span>
+      <button class="btn" type="button" id="agsSignIn" style="flex:none">Sign in</button>
+      <button class="btn" type="button" id="agsSignOut" style="flex:none" hidden>Sign out</button>
+    </div>
+
+    <div class="row" style="margin-top:11px">
+      <input type="text" id="agsQuery" spellcheck="false"
+             placeholder='type:"3D Tiles Layer"'>
+      <button class="btn" type="button" id="agsFind" style="flex:none" hidden>Search</button>
+    </div>
+    <div id="agsResults" style="max-height:280px;overflow-y:auto;margin-top:10px"></div>
+    <p class="note" id="agsNote"></p>
+
+    <div class="acts" style="justify-content:flex-end">
+      <button class="btn" type="button" id="agsClose">Close</button>
     </div>
   </form>
 </dialog>
@@ -1014,7 +1088,18 @@ async function glbRead(buffer) {
 }
 
 /* ------------------------------------------------------------- tileset */
-function joinUrl(base, rel) { return new URL(rel, base).href; }
+// A secured service wants its token on every request, and a tileset points
+// at its children by bare relative path. So a parent's query string is
+// inherited by anything it references -- which is what the Python Location
+// does, and without it the root would load and every tile under it would 403.
+function joinUrl(base, rel) {
+  const url = new URL(rel, base);
+  if (!url.search) {
+    const inherited = new URL(base).search;
+    if (inherited) url.search = inherited;
+  }
+  return url.href;
+}
 
 async function fetchJson(url) {
   const r = await fetch(url, { mode: "cors" });
@@ -1543,15 +1628,24 @@ function say(message, bad) {
   el.classList.add("on");
 }
 function hush() { $("status").classList.remove("on"); }
+// say() takes HTML on purpose -- it formats paths and commands -- so anything
+// coming from a file name, a class someone typed, a portal or a network error
+// has to be escaped on the way in. It matters more now that an access token
+// can be sitting in this page.
+function esc(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 function progress(done, total) {
   const bar = $("bar");
   if (done == null) { bar.classList.remove("on"); bar.style.width = "0"; return; }
   bar.classList.add("on");
   bar.style.width = (100 * done / Math.max(total, 1)).toFixed(1) + "%";
 }
-window.addEventListener("error", e => say("Error: " + e.message, true));
+window.addEventListener("error", e => say("Error: " + esc(e.message), true));
 window.addEventListener("unhandledrejection", e =>
-  say("Error: " + ((e.reason && e.reason.message) || e.reason), true));
+  say("Error: " + esc((e.reason && e.reason.message) || e.reason), true));
 
 const fmt = (v, d = 2) => Number(v).toFixed(d);
 const commas = v => Number(v).toLocaleString();
@@ -1739,7 +1833,7 @@ const sortWorker = spawn("sortWorkerSrc");
 const jobWorker = spawn("jobWorkerSrc");
 for (const w of [sortWorker, jobWorker]) {
   if (w instanceof Worker) {
-    w.onerror = e => say("Worker error: " + (e.message || "failed to start"), true);
+    w.onerror = e => say("Worker error: " + esc(e.message || "failed to start"), true);
   }
 }
 
@@ -2754,7 +2848,8 @@ function assignClass(code) {
   const nextC = new Int32Array(idx.length);
   for (let j = 0; j < idx.length; j++) nextC[j] = scene.cluster[idx[j]];
   applyEdit(idx, nextK, nextC);
-  say(`${commas(idx.length)} splats set to ${classOf(code).name.toLowerCase()}.`);
+  say(`${commas(idx.length)} splats set to ` +
+      `${esc(classOf(code).name.toLowerCase())}.`);
   setTimeout(hush, 2600);
 }
 
@@ -2890,14 +2985,14 @@ async function exportEdits() {
   const text = JSON.stringify(doc);
   const how = await saveFile(name, text);
   if (how === "saved") {
-    const made = doc.classes ? Object.values(doc.classes) : [];
-    say(`Saved <code>${name}</code> &mdash; ${commas(changed)} splats in ` +
+    const made = (doc.classes ? Object.values(doc.classes) : []).map(esc);
+    say(`Saved <code>${esc(name)}</code> &mdash; ${commas(changed)} splats in ` +
         `${doc.assignments.length} assignment(s)` +
         (made.length ? `, including the class${made.length === 1 ? "" : "es"} ` +
                        `<strong>${made.join(", ")}</strong>` : "") +
         (cropped ? `, and ${commas(cropped)} cropped away` : "") +
         `. Apply it with ` +
-        `<code>splat-tiles relabel &lt;ply&gt; --edits ${name} -o out.ply</code>.`);
+        `<code>splat-tiles relabel &lt;ply&gt; --edits ${esc(name)} -o out.ply</code>.`);
   } else {
     say("This frame will not let the page hand you a file. " +
         "Open the viewer from a local file instead, or copy the edits out of " +
@@ -3068,7 +3163,7 @@ function buildClasses(counts) {
     b.className = n ? "cls" : "cls empty";
     b.setAttribute("aria-pressed", String(!!classOn[c.index]));
     b.innerHTML = `<span class="dot" style="background:${classCss(c)}"></span>` +
-                  `<span>${c.name}</span>` +
+                  `<span>${esc(c.name)}</span>` +
                   `<span class="n mono num">${n ? commas(n) : ""}</span>`;
     if (n) {
       b.addEventListener("click", () => {
@@ -3094,7 +3189,7 @@ function buildAssign() {
     b.title = "Set the selection to " + c.name.toLowerCase() +
               (i < 9 ? "  (" + (i + 1) + ")" : "");
     b.innerHTML = `<span class="dot" style="background:${classCss(c)}"></span>` +
-                  `<span>${c.name}</span>`;
+                  `<span>${esc(c.name)}</span>`;
     b.addEventListener("click", () => assignClass(c.code));
     host.appendChild(b);
   });
@@ -3270,7 +3365,7 @@ function load(next, keepView) {
   $("hint").hidden = false;
   $("runSegment").disabled = false;
   $("loadedNote").innerHTML =
-    "<strong>" + (next.header.name || next.header.fromTiles || "capture") +
+    "<strong>" + esc(next.header.name || next.header.fromTiles || "capture") +
     "</strong><br>" + commas(next.header.points) + " splats" +
     (next.header.fromTiles ? " from " + commas(next.header.tiles) + " tiles" : "");
   refreshSelectionUI();
@@ -3569,7 +3664,7 @@ $("runSegment").addEventListener("click", async () => {
           .sort((a, b) => b[1] - a[1])
           .map(([k, v]) => `${commas(v)} ${k}`).join(", ") + ".");
   } catch (err) {
-    say("Segmentation failed: " + err.message, true);
+    say("Segmentation failed: " + esc(err.message), true);
   } finally {
     btn.disabled = false;
   }
@@ -3622,7 +3717,7 @@ $("urlProbe").addEventListener("click", async () => {
       : "This tileset declares no <code>ESRI_crs</code>, so it opens in a " +
         "local frame with no projected coordinates.";
   } catch (err) {
-    $("urlNote").innerHTML = "Could not read it: " + err.message +
+    $("urlNote").innerHTML = "Could not read it: " + esc(err.message) +
       (/failed to fetch|networkerror|load failed/i.test(err.message)
         ? ". If this page is running inside claude.ai, the frame blocks " +
           "requests to other hosts &mdash; open " +
@@ -3656,7 +3751,7 @@ $("urlGo").addEventListener("click", async () => {
         `Nothing is classified yet — open <strong>Segment this cloud</strong> ` +
         `in the rail to run the column rules here in the browser.`);
   } catch (err) {
-    say("Could not load that tileset: " + err.message, true);
+    say("Could not load that tileset: " + esc(err.message), true);
   }
 });
 
@@ -3681,7 +3776,7 @@ function readClassSidecar(file) {
     }
     const named = Object.values(doc.classes || {});
     say(`Named ${named.length} class${named.length === 1 ? "" : "es"} from ` +
-        `<code>${file.name}</code>: ${named.join(", ")}.`);
+        `<code>${esc(file.name)}</code>: ${named.map(esc).join(", ")}.`);
     setTimeout(hush, 5000);
     return true;
   });
@@ -3689,7 +3784,7 @@ function readClassSidecar(file) {
 
 function readFile(file) {
   const mb = (file.size / 1e6).toFixed(1);
-  say(`Reading <code>${file.name}</code> (${mb} MB)…`);
+  say(`Reading <code>${esc(file.name)}</code> (${mb} MB)…`);
   file.arrayBuffer().then(buffer => {
     // Give the banner a frame to paint before the parse blocks the thread.
     setTimeout(() => {
@@ -3714,10 +3809,11 @@ function readFile(file) {
                 `edits still address the whole file.` : ""), dropped > 0);
         setTimeout(hush, dropped > 0 ? 10000 : 4500);
       } catch (err) {
-        say("Could not read <code>" + file.name + "</code>: " + err.message, true);
+        say("Could not read <code>" + esc(file.name) + "</code>: " +
+            esc(err.message), true);
       }
     }, 30);
-  }, err => say("Could not open that file: " + err.message, true));
+  }, err => say("Could not open that file: " + esc(err.message), true));
 }
 // Take the sidecars first, so the cloud they name is already described by
 // the time it loads.
@@ -3771,11 +3867,270 @@ if (gl) {
   // A link can arrive pointed at a layer: ...?tileset=<encoded tileset.json>.
   // It reads the tree and stops there rather than downloading -- how many
   // tiles to pull is a real decision, not one a URL should make for you.
-  const wanted = new URLSearchParams(location.search).get("tileset");
+  const wanted = agsIsReturn()
+    ? null : new URLSearchParams(location.search).get("tileset");
   if (wanted) {
     $("openUrl").click();
     $("urlInput").value = wanted;
     $("urlProbe").click();
   }
 }
+
+/* --------------------------------------------------------- ArcGIS sign-in */
+// OAuth 2.0 with PKCE, which is the flow for a page that cannot keep a
+// secret. The client id is not one -- it is public by design -- so it lives
+// in localStorage next to the portal address and is asked for once. The
+// access token does not: it goes in sessionStorage, so closing the tab ends
+// the session, and it is never written into a URL this page keeps.
+const AGS_STORE = "splat.arcgis.";
+const ags = {
+  portal: localStorage.getItem(AGS_STORE + "portal") || "https://www.arcgis.com",
+  clientId: localStorage.getItem(AGS_STORE + "clientId") || "",
+  token: null, username: null, expires: 0
+};
+
+function agsRestore() {
+  try {
+    const raw = sessionStorage.getItem(AGS_STORE + "session");
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.expires > Date.now() + 30000) {
+      ags.token = s.token; ags.username = s.username; ags.expires = s.expires;
+    } else {
+      sessionStorage.removeItem(AGS_STORE + "session");
+    }
+  } catch (err) { /* a broken session is no session */ }
+}
+
+function agsKeep() {
+  sessionStorage.setItem(AGS_STORE + "session", JSON.stringify({
+    token: ags.token, username: ags.username, expires: ags.expires }));
+}
+
+function agsSignedIn() { return !!ags.token && ags.expires > Date.now(); }
+
+// The redirect URI has to match the one registered on the app exactly, and
+// ArcGIS will not accept a query string on it -- so the page address without
+// one is what gets registered, and what is sent.
+function agsRedirectUri() {
+  // Canonical, so a single URI on the registered app covers arriving at the
+  // directory or at index.html. It must match the registration exactly.
+  return location.origin + location.pathname.replace(/index\.html$/, "");
+}
+
+function agsRandom(bytes) {
+  const a = new Uint8Array(bytes);
+  crypto.getRandomValues(a);
+  return btoa(String.fromCharCode(...a))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function agsChallenge(verifier) {
+  const digest = await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(verifier));
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function agsSignIn() {
+  if (!ags.clientId) {
+    $("agsNote").textContent = "Paste a client id first.";
+    return;
+  }
+  if (location.protocol === "file:") {
+    $("agsNote").textContent =
+      "Sign-in needs the hosted copy. ArcGIS will not accept a file:// " +
+      "address as a redirect URI.";
+    return;
+  }
+  const verifier = agsRandom(48);
+  const state = agsRandom(12);
+  sessionStorage.setItem(AGS_STORE + "pkce", verifier);
+  sessionStorage.setItem(AGS_STORE + "state", state);
+  // Anything the page was about to do survives the round trip to the portal.
+  sessionStorage.setItem(AGS_STORE + "return", location.search || "");
+
+  const url = new URL(ags.portal.replace(/\/+$/, "") +
+                      "/sharing/rest/oauth2/authorize");
+  url.searchParams.set("client_id", ags.clientId);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", agsRedirectUri());
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", await agsChallenge(verifier));
+  url.searchParams.set("code_challenge_method", "S256");
+  location.assign(url.href);
+}
+
+// True when this load is the portal sending us back, so the rest of the boot
+// knows not to act on a query string that is not ours.
+function agsIsReturn() {
+  const q = new URLSearchParams(location.search);
+  return q.has("code") || q.has("error");
+}
+
+async function agsHandleRedirect() {
+  const q = new URLSearchParams(location.search);
+  const clean = () => history.replaceState(
+    null, "", agsRedirectUri() + (sessionStorage.getItem(AGS_STORE + "return") || ""));
+
+  if (q.get("error")) {
+    const detail = q.get("error_description") || q.get("error");
+    clean();
+    say("ArcGIS sign-in was refused: " + esc(detail), true);
+    return;
+  }
+  const code = q.get("code");
+  if (!code) return;
+
+  const verifier = sessionStorage.getItem(AGS_STORE + "pkce");
+  const expected = sessionStorage.getItem(AGS_STORE + "state");
+  sessionStorage.removeItem(AGS_STORE + "pkce");
+  sessionStorage.removeItem(AGS_STORE + "state");
+  if (!verifier || q.get("state") !== expected) {
+    clean();
+    say("Ignoring an ArcGIS sign-in this page did not start.", true);
+    return;
+  }
+
+  try {
+    const body = new URLSearchParams({
+      f: "json", grant_type: "authorization_code", client_id: ags.clientId,
+      code, redirect_uri: agsRedirectUri(), code_verifier: verifier
+    });
+    const r = await fetch(ags.portal.replace(/\/+$/, "") + "/sharing/rest/oauth2/token",
+                          { method: "POST", body });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error.message || data.error);
+    ags.token = data.access_token;
+    ags.username = data.username || "signed in";
+    ags.expires = Date.now() + (data.expires_in || 1800) * 1000;
+    agsKeep();
+    say("Signed in to ArcGIS as <strong>" + esc(ags.username) + "</strong>.");
+    setTimeout(hush, 4000);
+  } catch (err) {
+    say("Could not finish ArcGIS sign-in: " + esc(err.message), true);
+  }
+  clean();
+  agsPaint();
+}
+
+function agsSignOut() {
+  ags.token = null; ags.username = null; ags.expires = 0;
+  sessionStorage.removeItem(AGS_STORE + "session");
+  $("agsResults").textContent = "";
+  agsPaint();
+}
+
+/* ------------------------------------------------------------- content */
+// The exact item type string for a hosted splat layer is not something to
+// guess at, so the search is deliberately loose and the filter is on the
+// thing that actually matters: an item is usable here if its URL is a
+// 3D Tiles service.
+function agsUsable(item) {
+  const url = String(item.url || "");
+  return /3dtilesserver/i.test(url) || /3d tiles/i.test(String(item.type || ""));
+}
+
+async function agsSearch() {
+  if (!agsSignedIn()) return;
+  const query = $("agsQuery").value.trim() || 'type:"3D Tiles Layer"';
+  const host = $("agsResults");
+  host.innerHTML = '<p class="note">Searching…</p>';
+  try {
+    const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/search");
+    url.searchParams.set("q", query);
+    url.searchParams.set("num", "100");
+    url.searchParams.set("f", "json");
+    url.searchParams.set("token", ags.token);
+    const r = await fetch(url.href);
+    const data = await r.json();
+    if (data.error) throw new Error(data.error.message || "search failed");
+    const items = (data.results || []).filter(agsUsable);
+    agsPaintResults(items, (data.results || []).length);
+  } catch (err) {
+    host.innerHTML = '<p class="note warn">' + esc(err.message) + "</p>";
+  }
+}
+
+function agsPaintResults(items, total) {
+  const host = $("agsResults");
+  host.textContent = "";
+  if (!items.length) {
+    host.innerHTML = '<p class="note">Nothing here is a 3D Tiles service' +
+      (total ? " (" + total + " item(s) matched, none usable)" : "") +
+      ". Try a different search.</p>";
+    return;
+  }
+  for (const item of items) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "item ags";
+    b.innerHTML = '<span class="h">' + esc(item.title || item.id) + "</span>" +
+                  '<span class="w mono">' + esc(item.type || "") + "</span>";
+    b.addEventListener("click", () => agsOpen(item));
+    host.appendChild(b);
+  }
+  const note = document.createElement("p");
+  note.className = "note";
+  note.textContent = items.length + " of " + total +
+                     " result(s) are 3D Tiles services.";
+  host.appendChild(note);
+}
+
+// The token rides on the tileset URL, and the decoder passes a parent's query
+// string down to its children, so every tile and every external tileset the
+// tree points at is fetched with it too.
+function agsOpen(item) {
+  const base = String(item.url || "").replace(/\/+$/, "");
+  if (!base) return;
+  const url = base + "/tileset.json?token=" + encodeURIComponent(ags.token);
+  $("agsDlg").close();
+  $("openUrl").click();
+  $("urlInput").value = url;
+  $("urlProbe").click();
+}
+
+/* ------------------------------------------------------------------- UI */
+function agsPaint() {
+  const on = agsSignedIn();
+  $("agsWho").innerHTML = on
+    ? "Signed in as <strong>" + esc(ags.username) + "</strong>"
+    : "Not signed in.";
+  $("agsSignIn").hidden = on;
+  $("agsSignOut").hidden = !on;
+  $("agsFind").hidden = !on;
+  $("agsSetup").open = !ags.clientId;
+  $("agsPortal").value = ags.portal;
+  $("agsClient").value = ags.clientId;
+  $("agsRedirect").textContent = agsRedirectUri();
+  if (!on) $("agsResults").textContent = "";
+}
+
+function agsSaveSettings() {
+  ags.portal = $("agsPortal").value.trim() || "https://www.arcgis.com";
+  ags.clientId = $("agsClient").value.trim();
+  localStorage.setItem(AGS_STORE + "portal", ags.portal);
+  localStorage.setItem(AGS_STORE + "clientId", ags.clientId);
+  $("agsNote").textContent = ags.clientId
+    ? "Saved. Sign in when you are ready." : "";
+  agsPaint();
+}
+
+$("railArcgis").addEventListener("click", () => { agsPaint(); $("agsDlg").showModal(); });
+$("emptyArcgis").addEventListener("click", () => $("railArcgis").click());
+$("agsClose").addEventListener("click", () => $("agsDlg").close());
+$("agsSave").addEventListener("click", agsSaveSettings);
+$("agsSignIn").addEventListener("click", () => { agsSaveSettings(); agsSignIn(); });
+$("agsSignOut").addEventListener("click", agsSignOut);
+$("agsFind").addEventListener("click", agsSearch);
+$("agsForm").addEventListener("submit", e => {
+  e.preventDefault();
+  if (agsSignedIn()) agsSearch(); else agsSignIn();
+});
+$("agsCopyRedirect").addEventListener("click", e =>
+  copy(agsRedirectUri(), e.target, "Copied", "Copy"));
+
+agsRestore();
+agsPaint();
+if (agsIsReturn()) agsHandleRedirect();
 </script>
