@@ -1313,9 +1313,13 @@ async function fetchTiles(tree, level, report) {
         geometricErrorChild: Math.min(...tree.tiles
           .filter(t => t.error != null).map(t => t.error).concat([0.5])),
         upAxis: "z", spz: { fractionalBits: fracBits, antialiased: true },
-        source: { tileset: tree.rootUrl, tiles: decoded.length, splats: total }
+        source: { tileset: scrub(tree.rootUrl), tiles: decoded.length,
+                  splats: total }
       } : null,
-      fromTiles: tree.rootUrl, level, tiles: decoded.length
+      // Scrubbed at the point it is stored, not where it is shown: this
+      // header is copied into the exported edits file and logged, and a
+      // token has no business in either.
+      fromTiles: scrub(tree.rootUrl), level, tiles: decoded.length
     },
     position, colour, opacity, scale, rot,
     klass: new Uint8Array(total), cluster: new Int32Array(total).fill(-1),
@@ -2953,7 +2957,7 @@ function buildEdits() {
   const document_ = {
     format: "splatseg-edits", version: 1,
     splats: scene.header.sourcePoints || pointCount,
-    source: scene.header.name || scene.header.fromTiles || "",
+    source: scrub(scene.header.name || scene.header.fromTiles || ""),
     assignments
   };
   if (Object.keys(classes).length) document_.classes = classes;
