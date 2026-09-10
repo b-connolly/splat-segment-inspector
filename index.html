@@ -1,4 +1,4 @@
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-txMvW9jkwv3asfeui4wMSdPDJbLfFCCctjii026EvOo='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-IKHleecfb6dFNPXzV619ImGec6p+C2gHYcH6uYORii4='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
 <title>Splat Segment Inspector</title>
 <!-- This page holds a bearer token and GitHub Pages cannot send
@@ -3313,12 +3313,18 @@ function applyFilters() {
   invalidate(false);
 }
 
+//: A segmentation makes tens of groups; over-segmenting into patches makes
+//: thousands, and a DOM row for each of them stalls the page for no gain.
+const LIST_CAP = 400;
+
 function drawList() {
   const host = $("list");
   host.textContent = "";
-  $("listCount").textContent = `(${listed.length})`;
+  $("listCount").textContent = listed.length > LIST_CAP
+    ? `(${commas(LIST_CAP)} of ${commas(listed.length)})`
+    : `(${listed.length})`;
   const frag = document.createDocumentFragment();
-  for (const c of listed) {
+  for (const c of listed.slice(0, LIST_CAP)) {
     const cls = classOf(c.class);
     const b = document.createElement("button");
     b.className = "item";
@@ -3332,6 +3338,14 @@ function drawList() {
     frag.appendChild(b);
   }
   host.appendChild(frag);
+  if (listed.length > LIST_CAP) {
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.padding = "0 16px";
+    note.textContent = "Showing the " + commas(LIST_CAP) + " tallest of " +
+      commas(listed.length) + ". Click one in the view to select it directly.";
+    host.appendChild(note);
+  }
 }
 
 function select(id, frame) {
