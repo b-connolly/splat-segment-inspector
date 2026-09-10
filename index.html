@@ -1,4 +1,4 @@
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-JhOUO07yecSXrrrPx8bXaPx4i0XRpq+oE3lsAuNnKN4='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-i3mB63RoSAzP8eKF2k+3BrCk3uEWDPbIp2vfCx9fHu8='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
 <title>Splat Segment Inspector</title>
 <!-- This page holds a bearer token and GitHub Pages cannot send
@@ -467,11 +467,6 @@ kbd {
           <label for="psize">Point size</label>
           <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
           <span class="val mono num" id="psizeVal">2.0</span>
-        </div>
-        <div class="row">
-          <label for="isolate">Dim the rest</label>
-          <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
-          <span class="val mono num" id="isolateVal">0.80</span>
         </div>
       </details>
     </div>
@@ -2311,13 +2306,24 @@ vec4 shade(Splat s) {
             : uMode == 1 ? (s.cluster < 0 ? vec3(0.28) : clusterHue(s.cluster))
             : s.colour;
   bool lit = s.picked || s.inCluster;
-  if ((uHasSel == 1 || uSelected >= 0) && !lit) {
+
+  // Nothing that is not selected is recoloured. Washing the rest towards
+  // grey the instant something was picked took a true-colour capture and
+  // made it look like a bad screenshot of itself; de-emphasis belongs on
+  // the transparency slider, where it is the viewer's decision.
+  //
+  // uDim survives for the points path only, which does no alpha blending
+  // and so has no other way to show contrast.
+  if (uDim > 0.0 && (uHasSel == 1 || uSelected >= 0) && !lit) {
     base = mix(base, vec3(0.20, 0.23, 0.26), uDim);
   }
-  if (s.picked) base = mix(base, uSelColour, 0.55);
-  else if (s.inCluster) base = mix(base, vec3(1.0), 0.35);
-  // Whatever is lit keeps its opacity: fading the capture is for seeing
-  // past it, and fading the thing you are looking at with it defeats that.
+  // Lit splats are lifted, not repainted: enough tint to find them, not so
+  // much that a steel column stops looking like steel.
+  if (s.picked) base = mix(base, uSelColour, 0.35) * 1.12;
+  else if (s.inCluster) base = mix(base, vec3(1.0), 0.30) * 1.08;
+
+  // What is lit keeps its opacity: fading the capture is for seeing past
+  // it, and fading the thing you are looking at defeats that.
   return vec4(base, lit ? s.alpha : s.alpha * uOpacity);
 }
 
@@ -2668,7 +2674,7 @@ function frameBox(lo, hi) {
 }
 
 /* --------------------------------------------------------------- state */
-let mode = 2, selected = -1, pointScale = 2, dim = 0.8, spread = 1.0;
+let mode = 2, selected = -1, pointScale = 2, spread = 1.0;
 let opacity = 1.0;
 let drawMode = "splats";
 let clusters = [], listed = [];
@@ -2701,7 +2707,9 @@ function setCommonUniforms(prog, pickMode) {
   gl.uniform1i(u.uHasSel, selCount > 0 ? 1 : 0);
   gl.uniform1f(u.uPointScale, pointScale);
   gl.uniform1f(u.uSpread, spread);
-  gl.uniform1f(u.uDim, dim);
+  // Gaussians de-emphasise by going transparent; points, which do not
+  // blend, have only the grey wash.
+  gl.uniform1f(u.uDim, drawMode === "splats" ? 0.0 : 0.7);
   gl.uniform1f(u.uOpacity, drawMode === "splats" ? opacity : 1.0);
 
   const bind = (unit, tex, loc) => {
@@ -3711,7 +3719,6 @@ function slider(id, valId, format, apply) {
 }
 slider("spread", "spreadVal", v => fmt(v, 2), v => { spread = v; invalidate(false); });
 slider("psize", "psizeVal", v => fmt(v, 1), v => { pointScale = v; invalidate(false); });
-slider("isolate", "isolateVal", v => fmt(v, 2), v => { dim = v; invalidate(false); });
 slider("opacity", "opacityVal", v => (v >= 1 ? "solid" : fmt(v, 2)),
        v => { opacity = v; invalidate(false); });
 slider("brush", "brushVal", v => v.toFixed(0) + " px", v => { brushRadius = v; drawOverlay(); });
