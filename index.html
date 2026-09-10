@@ -3635,5 +3635,15 @@ if (gl) {
   buildAssign();
   refreshSelectionUI();
   render();
+
+  // A link can arrive pointed at a layer: ...?tileset=<encoded tileset.json>.
+  // It reads the tree and stops there rather than downloading -- how many
+  // tiles to pull is a real decision, not one a URL should make for you.
+  const wanted = new URLSearchParams(location.search).get("tileset");
+  if (wanted) {
+    $("openUrl").click();
+    $("urlInput").value = wanted;
+    $("urlProbe").click();
+  }
 }
 </script>
