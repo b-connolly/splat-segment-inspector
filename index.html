@@ -167,8 +167,6 @@ details.step[open] > summary::after { transform: rotate(90deg); }
 }
 .item.ags .h { font-weight: 500; }
 .item.ags .w { font-size: 11px; color: var(--ink-faint); }
-#agsSetup > summary { margin-bottom: 0; }
-#agsSetup[open] > summary { margin-bottom: 8px; }
 
 .classes { display: flex; flex-direction: column; gap: 2px; }
 .cls {
@@ -620,41 +618,19 @@ kbd {
       tiles with.
     </p>
 
-    <details class="block" id="agsSetup" style="padding:12px 14px;border:1px solid var(--line);border-radius:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
-      <summary id="agsSetupLabel">One-time setup</summary>
-      <div>
-        <p class="note" id="agsConfigured" hidden></p>
-        <p class="note" style="margin-top:0">
-          Register an OAuth application in your organization
-          (<strong>Content &rarr; New item &rarr; Developer credentials &rarr;
-          OAuth 2.0</strong>) and give it this redirect URL. There is no client
-          secret: this is a public app using PKCE.
-        </p>
-        <div class="row">
-          <code class="mono" id="agsRedirect" style="flex:1;font-size:11px;overflow-x:auto;white-space:nowrap;background:var(--shell);padding:6px 8px;border-radius:4px;border:1px solid var(--line)"></code>
-          <button class="btn" type="button" id="agsCopyRedirect" style="flex:none">Copy</button>
-        </div>
-        <div class="row" style="margin-top:9px">
-          <label for="agsPortal" style="flex:none;width:66px">Portal</label>
-          <input type="url" id="agsPortal" spellcheck="false"
-                 placeholder="https://www.arcgis.com">
-        </div>
-        <div class="row">
-          <label for="agsClient" style="flex:none;width:66px">Client id</label>
-          <input type="password" id="agsClient" spellcheck="false"
-                 autocomplete="off" placeholder="xxxxxxxxxxxxxxxx">
-          <button class="btn" type="button" id="agsReveal" style="flex:none"
-                  aria-pressed="false" title="Show what is typed here">Show</button>
-        </div>
-        <p class="note">For ArcGIS Enterprise, put your portal address in
-          instead &mdash; <code>https://gis.example.com/portal</code>.</p>
-        <div class="pair">
-          <button class="btn" type="button" id="agsSave">Save</button>
-          <button class="btn" type="button" id="agsClear" hidden
-                  title="Forget the values this browser has stored and go back to the deployment's">Clear override</button>
-        </div>
+    <div class="note" id="agsUnconfigured" hidden>
+      <p style="margin-top:0">This deployment has no ArcGIS App ID, so
+        sign-in cannot start. Whoever deploys it registers an OAuth
+        application (<strong>Content &rarr; New item &rarr; Developer
+        credentials &rarr; OAuth 2.0</strong>) with the redirect URL below,
+        puts the App ID in <code>viewer/.env.local</code>, and runs
+        <code>publish_site.py</code>.</p>
+      <div class="row">
+        <code class="mono" id="agsRedirect" style="flex:1;font-size:11px;overflow-x:auto;white-space:nowrap;background:var(--shell);padding:6px 8px;border-radius:4px;border:1px solid var(--line)"></code>
+        <button class="btn" type="button" id="agsCopyRedirect" style="flex:none">Copy</button>
       </div>
-    </details>
+    </div>
+
 
     <div class="row">
       <span class="rl" id="agsWho">Not signed in.</span>
@@ -3902,15 +3878,16 @@ const agsBuilt = (value) => (/^__[A-Z0-9_]+__$/.test(value) ? "" : value);
 const AGS_CLIENT = agsBuilt(AGS_BUILD_CLIENT_ID);
 const AGS_PORTAL = agsBuilt(AGS_BUILD_PORTAL) || "https://www.arcgis.com";
 
-// An override is for someone pointing this at a different organization, so
-// it is stored separately and only wins when it is actually set.
+// The deployment is the only source of these. There used to be a panel for
+// overriding them per browser; it existed for Enterprise users and was worth
+// less than the confusion of an app id sitting in a text box, so it is gone
+// and anything it stored is thrown away on load.
+localStorage.removeItem(AGS_STORE + "portal");
+localStorage.removeItem(AGS_STORE + "clientId");
+
 const ags = {
-  get portal() {
-    return localStorage.getItem(AGS_STORE + "portal") || AGS_PORTAL;
-  },
-  get clientId() {
-    return localStorage.getItem(AGS_STORE + "clientId") || AGS_CLIENT;
-  },
+  portal: AGS_PORTAL,
+  clientId: AGS_CLIENT,
   token: null, username: null, expires: 0
 };
 
@@ -3959,7 +3936,8 @@ async function agsChallenge(verifier) {
 
 async function agsSignIn() {
   if (!ags.clientId) {
-    $("agsNote").textContent = "Paste a client id first.";
+    $("agsNote").textContent =
+      "This deployment has no ArcGIS App ID, so sign-in cannot start.";
     return;
   }
   if (location.protocol === "file:") {
@@ -4125,72 +4103,18 @@ function agsPaint() {
   $("agsSignOut").hidden = !on;
   $("agsFind").hidden = !on;
 
-  // A configured deployment should not open on a form nobody has to fill in.
-  $("agsSetup").open = !ags.clientId;
-  $("agsSetup").hidden = false;
-  $("agsSetupLabel").textContent = AGS_CLIENT
-    ? "Use a different organization" : "One-time setup";
-  $("agsConfigured").hidden = !AGS_CLIENT;
-  $("agsConfigured").innerHTML = AGS_CLIENT
-    ? "This deployment already has a client id, registered against " +
-      "<strong>" + esc(AGS_PORTAL) + "</strong>. Fill these in only to sign " +
-      "in against a different portal." : "";
-  const overridePortal = localStorage.getItem(AGS_STORE + "portal") || "";
-  const overrideClient = localStorage.getItem(AGS_STORE + "clientId") || "";
-  $("agsPortal").value = overridePortal;
-  $("agsPortal").placeholder = AGS_PORTAL;
-  // Masked by default. An app id is not a credential -- the browser sends it
-  // to the portal on every sign-in -- but there is no reason to put it on
-  // screen, in a screen share, or in a screenshot either.
-  $("agsClient").value = overrideClient;
-  $("agsClient").placeholder = AGS_CLIENT
-    ? "using this deployment's client id" : "xxxxxxxxxxxxxxxx";
-  $("agsClear").hidden = !(overridePortal || overrideClient);
+  // Nothing here to configure: the only reason to show setup at all is a
+  // deployment that was never given an app id.
+  $("agsUnconfigured").hidden = !!AGS_CLIENT;
   $("agsRedirect").textContent = agsRedirectUri();
-  if (AGS_CLIENT && overrideClient === AGS_CLIENT) {
-    $("agsNote").textContent =
-      "That is the same client id this deployment already uses, so the " +
-      "override changes nothing. Clear it to stop storing a copy.";
-  }
+  $("agsQuery").disabled = !on;
   if (!on) $("agsResults").textContent = "";
-}
-
-function agsClearOverride() {
-  localStorage.removeItem(AGS_STORE + "portal");
-  localStorage.removeItem(AGS_STORE + "clientId");
-  $("agsNote").textContent = AGS_CLIENT
-    ? "Cleared. Back to the deployment's own settings."
-    : "Cleared.";
-  agsPaint();
-}
-
-// Empty means "no override", which is different from an empty client id.
-function agsSaveSettings() {
-  const portal = $("agsPortal").value.trim();
-  const client = $("agsClient").value.trim();
-  for (const [key, value] of [["portal", portal], ["clientId", client]]) {
-    if (value) localStorage.setItem(AGS_STORE + key, value);
-    else localStorage.removeItem(AGS_STORE + key);
-  }
-  $("agsNote").textContent = ags.clientId
-    ? "Saved. Sign in when you are ready."
-    : "Still no client id, so sign-in cannot start.";
-  agsPaint();
 }
 
 $("railArcgis").addEventListener("click", () => { agsPaint(); $("agsDlg").showModal(); });
 $("emptyArcgis").addEventListener("click", () => $("railArcgis").click());
 $("agsClose").addEventListener("click", () => $("agsDlg").close());
-$("agsSave").addEventListener("click", agsSaveSettings);
-$("agsClear").addEventListener("click", agsClearOverride);
-$("agsReveal").addEventListener("click", e => {
-  const field = $("agsClient");
-  const shown = field.type === "text";
-  field.type = shown ? "password" : "text";
-  e.target.textContent = shown ? "Show" : "Hide";
-  e.target.setAttribute("aria-pressed", String(!shown));
-});
-$("agsSignIn").addEventListener("click", () => { agsSaveSettings(); agsSignIn(); });
+$("agsSignIn").addEventListener("click", agsSignIn);
 $("agsSignOut").addEventListener("click", agsSignOut);
 $("agsFind").addEventListener("click", agsSearch);
 $("agsForm").addEventListener("submit", e => {
