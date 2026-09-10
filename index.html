@@ -638,9 +638,17 @@ kbd {
       <button class="btn" type="button" id="agsSignOut" style="flex:none" hidden>Sign out</button>
     </div>
 
-    <div class="row" style="margin-top:11px">
+    <div class="row" style="margin-top:12px" id="agsScopeRow" hidden>
+      <span class="rl">Look in</span>
+      <div class="seg small" id="agsScope" style="flex:2.2">
+        <button data-scope="mine" aria-pressed="true">My content</button>
+        <button data-scope="org" aria-pressed="false">My organization</button>
+        <button data-scope="all" aria-pressed="false">Everywhere</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:9px">
       <input type="text" id="agsQuery" spellcheck="false"
-             placeholder='type:"3D Tiles Layer"'>
+             placeholder="words in the title, or leave empty for all of them">
       <button class="btn" type="button" id="agsFind" style="flex:none" hidden>Search</button>
     </div>
     <div id="agsResults" style="max-height:280px;overflow-y:auto;margin-top:10px"></div>
@@ -1073,6 +1081,15 @@ async function glbRead(buffer) {
 // at its children by bare relative path. So a parent's query string is
 // inherited by anything it references -- which is what the Python Location
 // does, and without it the root would load and every tile under it would 403.
+// An access token rides in the query string of a secured service, and every
+// error below quotes the URL it failed on. Those messages end up on screen
+// and in screenshots, so the token comes out first. It is a real credential,
+// unlike the app id.
+function scrub(url) {
+  return String(url).replace(/([?&](?:token|code|access_token)=)[^&]*/gi,
+                             "$1[redacted]");
+}
+
 function joinUrl(base, rel) {
   const url = new URL(rel, base);
   if (!url.search) {
@@ -1084,8 +1101,14 @@ function joinUrl(base, rel) {
 
 async function fetchJson(url) {
   const r = await fetch(url, { mode: "cors" });
-  if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
-  return r.json();
+  if (!r.ok) throw new Error("HTTP " + r.status + " for " + scrub(url));
+  const doc = await r.json();
+  // A secured service answers 200 with an error body rather than a status.
+  if (doc && doc.error) {
+    throw new Error((doc.error.message || "refused") + " (" +
+                    (doc.error.code || "?") + ") for " + scrub(url));
+  }
+  return doc;
 }
 
 function contentUris(node) {
@@ -1210,7 +1233,7 @@ async function fetchTiles(tree, level, report) {
   let done = 0;
   const decoded = await pool(cut, 8, async (tile) => {
     const r = await fetch(tile.url, { mode: "cors" });
-    if (!r.ok) throw new Error("HTTP " + r.status + " for " + tile.url);
+    if (!r.ok) throw new Error("HTTP " + r.status + " for " + scrub(tile.url));
     const t = await glbRead(await r.arrayBuffer());
     // payload -> projected CRS -> a local frame anchored at the layer origin.
     // Only the translation is removed, never the rotation, so the local axes
@@ -1613,8 +1636,13 @@ function hush() { $("status").classList.remove("on"); }
 // coming from a file name, a class someone typed, a portal or a network error
 // has to be escaped on the way in. It matters more now that an access token
 // can be sitting in this page.
-function esc(value) {
+// Same reason as the worker's: a token in a URL must not reach the screen.
+function scrub(value) {
   return String(value == null ? "" : value)
+    .replace(/([?&](?:token|code|access_token)=)[^&\s]*/gi, "$1[redacted]");
+}
+function esc(value) {
+  return scrub(value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
@@ -3671,8 +3699,14 @@ $("urlForm").addEventListener("submit", e => {
   ($("urlGo").hidden ? $("urlProbe") : $("urlGo")).click();
 });
 $("urlProbe").addEventListener("click", async () => {
-  const url = $("urlInput").value.trim();
+  let url = $("urlInput").value.trim();
   if (!url) return;
+  // A layer picked out of ArcGIS needs its token, which is deliberately not
+  // in the box the user can see.
+  if (agsToken && !/[?&]token=/.test(url)) {
+    url += (url.includes("?") ? "&" : "?") + "token=" +
+           encodeURIComponent(agsToken);
+  }
   $("urlProbe").disabled = true;
   $("urlNote").textContent = "Reading the tile tree…";
   try {
@@ -4010,12 +4044,18 @@ async function agsHandleRedirect() {
     agsKeep();
     say("Signed in to ArcGIS as <strong>" + esc(ags.username) + "</strong>.");
     setTimeout(hush, 4000);
+    // Straight to the list: signing in is not the thing anyone came for.
+    $("agsDlg").showModal();
+    agsPaint();
+    agsSearch();
   } catch (err) {
     say("Could not finish ArcGIS sign-in: " + esc(err.message), true);
   }
   clean();
   agsPaint();
 }
+
+let agsScope = "mine";
 
 function agsSignOut() {
   ags.token = null; ags.username = null; ags.expires = 0;
@@ -4025,73 +4065,126 @@ function agsSignOut() {
 }
 
 /* ------------------------------------------------------------- content */
-// The exact item type string for a hosted splat layer is not something to
-// guess at, so the search is deliberately loose and the filter is on the
-// thing that actually matters: an item is usable here if its URL is a
-// 3D Tiles service.
+// Searching without a scope searches all public content, which is why a word
+// like "SanJose" comes back as a hundred strangers' items. Restricting to an
+// owner or an org needs both names, and portals/self is where they live.
+async function agsSelf() {
+  if (ags.self) return ags.self;
+  const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/portals/self");
+  url.searchParams.set("f", "json");
+  url.searchParams.set("token", ags.token);
+  const data = await (await fetch(url.href)).json();
+  if (data.error) throw new Error(data.error.message || "could not read the portal");
+  ags.self = { orgid: data.id || "",
+               username: (data.user || {}).username || ags.username };
+  return ags.self;
+}
+
+// A hosted splat layer is item type "3DTiles Service" -- no space, which is
+// what made an earlier "3d tiles" test quietly reject every one of them. The
+// URL check is the belt to that brace, and "3DTiles Package" is excluded on
+// purpose: a .3tz is a download, not something to fetch tiles from.
+const AGS_TYPE = "3DTiles Service";
+
 function agsUsable(item) {
   const url = String(item.url || "");
-  return /3dtilesserver/i.test(url) || /3d tiles/i.test(String(item.type || ""));
+  const type = String(item.type || "").replace(/\s+/g, "").toLowerCase();
+  return type === "3dtilesservice" || /3dtilesserver/i.test(url);
 }
 
 async function agsSearch() {
   if (!agsSignedIn()) return;
-  const query = $("agsQuery").value.trim() || 'type:"3D Tiles Layer"';
   const host = $("agsResults");
   host.innerHTML = '<p class="note">Searching…</p>';
   try {
+    const me = await agsSelf();
+    const scope = agsScope;
+    const terms = $("agsQuery").value.trim();
+    const parts = ['type:"' + AGS_TYPE + '"'];
+    if (terms) parts.push("(" + terms + ")");
+    if (scope === "mine" && me.username) parts.push('owner:"' + me.username + '"');
+    else if (scope === "org" && me.orgid) parts.push("orgid:" + me.orgid);
+
     const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/search");
-    url.searchParams.set("q", query);
+    url.searchParams.set("q", parts.join(" AND "));
     url.searchParams.set("num", "100");
+    url.searchParams.set("sortField", "modified");
+    url.searchParams.set("sortOrder", "desc");
     url.searchParams.set("f", "json");
     url.searchParams.set("token", ags.token);
-    const r = await fetch(url.href);
-    const data = await r.json();
+    const data = await (await fetch(url.href)).json();
     if (data.error) throw new Error(data.error.message || "search failed");
-    const items = (data.results || []).filter(agsUsable);
-    agsPaintResults(items, (data.results || []).length);
+    const results = data.results || [];
+    agsPaintResults(results.filter(agsUsable), results.length, scope, terms);
   } catch (err) {
     host.innerHTML = '<p class="note warn">' + esc(err.message) + "</p>";
   }
 }
 
-function agsPaintResults(items, total) {
+const AGS_WHERE = { mine: "your content", org: "your organization",
+                    all: "public content" };
+
+function agsPaintResults(items, total, scope, terms) {
   const host = $("agsResults");
   host.textContent = "";
   if (!items.length) {
-    host.innerHTML = '<p class="note">Nothing here is a 3D Tiles service' +
-      (total ? " (" + total + " item(s) matched, none usable)" : "") +
-      ". Try a different search.</p>";
+    const wider = scope === "mine" ? " Try <strong>My organization</strong>."
+                : scope === "org" ? " Try <strong>Everywhere</strong>." : "";
+    host.innerHTML = '<p class="note">No 3D Tiles service in ' +
+      AGS_WHERE[scope] + (terms ? " matching " + esc(terms) : "") + "." +
+      wider + "</p>";
     return;
   }
   for (const item of items) {
+    const when = item.modified
+      ? new Date(item.modified).toISOString().slice(0, 10) : "";
     const b = document.createElement("button");
     b.type = "button";
     b.className = "item ags";
     b.innerHTML = '<span class="h">' + esc(item.title || item.id) + "</span>" +
-                  '<span class="w mono">' + esc(item.type || "") + "</span>";
+                  '<span class="w mono">' + esc(item.owner || "") +
+                  (when ? " &middot; " + when : "") + "</span>";
     b.addEventListener("click", () => agsOpen(item));
     host.appendChild(b);
   }
   const note = document.createElement("p");
   note.className = "note";
-  note.textContent = items.length + " of " + total +
-                     " result(s) are 3D Tiles services.";
+  note.textContent = items.length + " in " + AGS_WHERE[scope] +
+                     (total > items.length
+                      ? " (" + (total - items.length) + " other result(s) hidden)"
+                      : "");
   host.appendChild(note);
 }
 
 // The token rides on the tileset URL, and the decoder passes a parent's query
 // string down to its children, so every tile and every external tileset the
 // tree points at is fetched with it too.
+// An item's URL comes in three shapes depending on how it was published:
+// already at tileset.json, at the 3DTilesServer endpoint, or at the bare
+// service root. Guessing wrong is a 404, and doubling tileset.json is the
+// same 404, so all three are handled rather than assumed.
+function agsTilesetUrl(item) {
+  let base = String(item.url || "").replace(/\/+$/, "");
+  if (!base) return "";
+  if (/\/tileset\.json$/i.test(base)) return base;
+  if (/\/3dtilesserver$/i.test(base)) return base + "/tileset.json";
+  return base + "/3DTilesServer/tileset.json";
+}
+
 function agsOpen(item) {
-  const base = String(item.url || "").replace(/\/+$/, "");
+  const base = agsTilesetUrl(item);
   if (!base) return;
-  const url = base + "/tileset.json?token=" + encodeURIComponent(ags.token);
   $("agsDlg").close();
   $("openUrl").click();
-  $("urlInput").value = url;
+  // The token stays out of the visible box -- it is a real credential, and
+  // that box ends up in screenshots. It is added when the fetch happens.
+  $("urlInput").value = base;
+  agsToken = ags.token;
   $("urlProbe").click();
 }
+
+// Set only for the moment between picking an item and reading its tree.
+let agsToken = "";
 
 /* ------------------------------------------------------------------- UI */
 function agsPaint() {
@@ -4108,7 +4201,8 @@ function agsPaint() {
   $("agsUnconfigured").hidden = !!AGS_CLIENT;
   $("agsRedirect").textContent = agsRedirectUri();
   $("agsQuery").disabled = !on;
-  if (!on) $("agsResults").textContent = "";
+  $("agsScopeRow").hidden = !on;
+  if (!on) { $("agsResults").textContent = ""; ags.self = null; }
 }
 
 $("railArcgis").addEventListener("click", () => { agsPaint(); $("agsDlg").showModal(); });
@@ -4117,6 +4211,14 @@ $("agsClose").addEventListener("click", () => $("agsDlg").close());
 $("agsSignIn").addEventListener("click", agsSignIn);
 $("agsSignOut").addEventListener("click", agsSignOut);
 $("agsFind").addEventListener("click", agsSearch);
+$("agsScope").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  [...$("agsScope").children].forEach(x =>
+    x.setAttribute("aria-pressed", String(x === b)));
+  agsScope = b.dataset.scope;
+  agsSearch();
+});
 $("agsForm").addEventListener("submit", e => {
   e.preventDefault();
   if (agsSignedIn()) agsSearch(); else agsSignIn();
