@@ -1,4 +1,4 @@
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-IKHleecfb6dFNPXzV619ImGec6p+C2gHYcH6uYORii4='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-JhOUO07yecSXrrrPx8bXaPx4i0XRpq+oE3lsAuNnKN4='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
 <title>Splat Segment Inspector</title>
 <!-- This page holds a bearer token and GitHub Pages cannot send
@@ -190,28 +190,49 @@ details.step[open] > summary::after { transform: rotate(90deg); }
 }
 
 .classes { display: flex; flex-direction: column; gap: 2px; }
-.cls {
-  display: grid;
-  grid-template-columns: 12px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border: 0; border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
+.cls { display: flex; align-items: stretch; border-radius: 4px; }
 .cls:hover { background: var(--raised); }
-.cls .dot { width: 12px; height: 12px; border-radius: 3px; }
-.cls .n { font-size: 12px; color: var(--ink-dim); }
-.cls[aria-pressed="false"] { opacity: .38; }
-.cls.empty { opacity: .5; cursor: default; }
-.cls.empty .n::after {
-  content: " none"; color: var(--ink-faint); font-size: 11px;
+.cls[aria-pressed="false"] { opacity: .42; }
+.cls.empty { opacity: .5; }
+.cls-take {
+  position: relative; flex: 1;
+  display: grid; grid-template-columns: 12px 1fr auto;
+  align-items: center; gap: 10px;
+  padding: 7px 8px; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; font: inherit;
+  cursor: pointer; text-align: left;
 }
-.cls[aria-pressed="false"] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--ink-faint); }
+.cls-take:disabled { cursor: default; }
+.cls-take .dot { width: 12px; height: 12px; border-radius: 3px; }
+.cls-take .nm { font-size: 13px; }
+.cls-take .n { font-size: 12px; color: var(--ink-dim); }
+.cls.empty .n::after {
+  content: "none"; color: var(--ink-faint); font-size: 11px;
+}
+/* How much of the capture each class holds, read at a glance. */
+.cls-take .bar {
+  position: absolute; left: 8px; right: auto; bottom: 2px; height: 2px;
+  border-radius: 1px; opacity: .55; max-width: calc(100% - 16px);
+}
+.cls-eye {
+  flex: none; width: 30px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--ink-faint);
+  font-size: 13px; cursor: pointer;
+}
+.cls-eye:hover:not(:disabled) { color: var(--accent); }
+.cls-eye:disabled { opacity: .35; cursor: default; }
+.cls[aria-pressed="false"] .dot {
+  background: transparent !important; box-shadow: inset 0 0 0 2px var(--ink-faint);
+}
+summary.tiny {
+  list-style: none; cursor: pointer; font-size: 11px; color: var(--ink-faint);
+  display: flex; align-items: center; gap: 6px;
+}
+summary.tiny::-webkit-details-marker { display: none; }
+summary.tiny::before {
+  content: "\25B8"; font-size: 8px; transition: transform .12s;
+}
+details[open] > summary.tiny::before { transform: rotate(90deg); }
 
 .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
 .seg button {
@@ -413,6 +434,48 @@ kbd {
       <p class="note" id="loadedNote">Nothing loaded yet.</p>
     </div>
 
+    <div class="block">
+      <span class="lbl">View</span>
+      <div class="row">
+        <span class="rl">Colour by</span>
+        <div class="seg small" id="mode" style="flex:2">
+          <button data-mode="2" aria-pressed="true">Capture</button>
+          <button data-mode="0" aria-pressed="false">Class</button>
+          <button data-mode="1" aria-pressed="false">Cluster</button>
+        </div>
+      </div>
+      <div class="row" id="opacityRow">
+        <label for="opacity">Transparency</label>
+        <input type="range" id="opacity" min="0.05" max="1" step="0.05" value="1">
+        <span class="val mono num" id="opacityVal">solid</span>
+      </div>
+      <details style="margin-top:9px">
+        <summary class="tiny">More</summary>
+        <div class="row" style="margin-top:8px">
+          <span class="rl">Draw as</span>
+          <div class="seg small" id="draw" style="flex:2">
+            <button data-draw="splats" aria-pressed="true">Gaussians</button>
+            <button data-draw="points" aria-pressed="false">Points</button>
+          </div>
+        </div>
+        <div class="row" id="spreadRow">
+          <label for="spread">Splat size</label>
+          <input type="range" id="spread" min="0.3" max="2.5" step="0.05" value="1">
+          <span class="val mono num" id="spreadVal">1.00</span>
+        </div>
+        <div class="row" id="psizeRow" hidden>
+          <label for="psize">Point size</label>
+          <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
+          <span class="val mono num" id="psizeVal">2.0</span>
+        </div>
+        <div class="row">
+          <label for="isolate">Dim the rest</label>
+          <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
+          <span class="val mono num" id="isolateVal">0.80</span>
+        </div>
+      </details>
+    </div>
+
     <details class="block step" id="segBlock">
       <summary><b>2</b>Segment it</summary>
       <div>
@@ -445,8 +508,37 @@ kbd {
       </div>
     </details>
 
+    <div class="block step">
+      <span class="lbl"><b>3</b>Review what is there</span>
+      <span class="sublbl">Classes &mdash; click to select, eye to hide</span>
+      <div class="classes" id="classes"></div>
+    </div>
+
+    <div class="block step" id="listBlock">
+      <span class="lbl">Clusters <span id="listCount" class="mono num"></span></span>
+      <div id="list"></div>
+      <div class="pair" style="padding-top:10px">
+        <button class="btn" id="selectListed" disabled>Select all listed</button>
+        <button class="btn" id="copyVisible">Copy ids</button>
+      </div>
+      <details style="margin-top:8px">
+        <summary class="tiny">Narrow the list</summary>
+        <div class="row" style="margin-top:8px">
+          <label for="minh">Min height</label>
+          <input type="range" id="minh" min="0" max="20" step="0.5" value="0">
+          <span class="val mono num" id="minhVal">0.0 m</span>
+        </div>
+        <div class="row">
+          <label for="maxw">Max width</label>
+          <input type="range" id="maxw" min="0.2" max="6" step="0.1" value="6">
+          <span class="val mono num" id="maxwVal">6.0 m</span>
+        </div>
+        <p class="note warn" id="hiddenNote"></p>
+      </details>
+    </div>
+
     <div class="block step" id="selBlock">
-      <span class="lbl"><b>3</b>Select splats</span>
+      <span class="lbl"><b>4</b>Select splats</span>
       <div class="row">
         <span id="selCount" class="mono num none">Nothing selected</span>
       </div>
@@ -477,32 +569,36 @@ kbd {
         </div>
       </div>
       <p class="note" id="selHint">Drag to select.</p>
-    </div>
-
-    <div class="block step">
-      <span class="lbl"><b>4</b>Edit</span>
-      <span class="sublbl">Set selected splats to</span>
-      <div class="assign" id="assign"></div>
-      <span class="sublbl">Cluster</span>
       <div class="pair">
-        <button class="btn" id="newCluster" disabled title="Give the selection a cluster id of its own">Split off</button>
-        <button class="btn" id="mergeCluster" disabled title="Give the whole selection one cluster id">Merge</button>
-      </div>
-      <span class="sublbl">Crop</span>
-      <div class="pair">
-        <button class="btn" id="cropDelete" disabled title="Take the selected splats out of the cloud">Delete selected</button>
-        <button class="btn" id="cropKeep" disabled title="Take everything except the selection out of the cloud">Keep only</button>
-      </div>
-      <p class="note" id="cropNote"></p>
-      <div class="pair" style="margin-top:10px">
-        <button class="btn" id="undo" disabled>Undo</button>
-        <button class="btn" id="redo" disabled>Redo</button>
-        <button class="btn" id="clearSelBtn" disabled>Deselect</button>
+        <button class="btn wide" id="clearSelBtn" disabled>Deselect</button>
       </div>
     </div>
 
+    <details class="block step" id="editBlock">
+      <summary><b>5</b>Edit</summary>
+      <div>
+        <span class="sublbl">Set selected splats to</span>
+        <div class="assign" id="assign"></div>
+        <span class="sublbl">Cluster</span>
+        <div class="pair">
+          <button class="btn" id="newCluster" disabled title="Give the selection a cluster id of its own">Split off</button>
+          <button class="btn" id="mergeCluster" disabled title="Give the whole selection one cluster id">Merge</button>
+        </div>
+        <span class="sublbl">Crop</span>
+        <div class="pair">
+          <button class="btn" id="cropDelete" disabled title="Take the selected splats out of the cloud">Delete selected</button>
+          <button class="btn" id="cropKeep" disabled title="Take everything except the selection out of the cloud">Keep only</button>
+        </div>
+        <p class="note" id="cropNote"></p>
+        <div class="pair" style="margin-top:10px">
+          <button class="btn" id="undo" disabled>Undo</button>
+          <button class="btn" id="redo" disabled>Redo</button>
+        </div>
+      </div>
+    </details>
+
     <div class="block step">
-      <span class="lbl"><b>5</b>Export</span>
+      <span class="lbl"><b>6</b>Export</span>
       <div class="pair">
         <button class="btn go wide" id="exportEdits" disabled>Export edits</button>
       </div>
@@ -510,65 +606,6 @@ kbd {
       <p class="note">Replay it onto the PLY with
         <code>splat-tiles relabel</code>, or <strong>Apply Splat Edits</strong>
         in the Pro toolbox, and publish from there.</p>
-    </div>
-
-    <div class="block">
-      <span class="lbl">Classes</span>
-      <div class="classes" id="classes"></div>
-    </div>
-
-    <div class="block">
-      <span class="lbl">Display</span>
-      <div class="seg" id="draw">
-        <button data-draw="splats" aria-pressed="true">Gaussians</button>
-        <button data-draw="points" aria-pressed="false">Points</button>
-      </div>
-      <div class="row" style="margin-top:11px" id="spreadRow">
-        <label for="spread">Splat size</label>
-        <input type="range" id="spread" min="0.3" max="2.5" step="0.05" value="1">
-        <span class="val mono num" id="spreadVal">1.00</span>
-      </div>
-      <div class="row" id="psizeRow" hidden>
-        <label for="psize">Point size</label>
-        <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
-        <span class="val mono num" id="psizeVal">2.0</span>
-      </div>
-      <div class="row" style="margin-top:11px">
-        <span class="rl">Colour by</span>
-        <div class="seg small" id="mode" style="flex:1.9">
-          <button data-mode="0" aria-pressed="false">Class</button>
-          <button data-mode="1" aria-pressed="false">Cluster</button>
-          <button data-mode="2" aria-pressed="true">Capture</button>
-        </div>
-      </div>
-      <div class="row">
-        <label for="isolate">Dim unselected</label>
-        <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
-        <span class="val mono num" id="isolateVal">0.80</span>
-      </div>
-    </div>
-
-    <div class="block">
-      <span class="lbl">Filter columns</span>
-      <div class="row">
-        <label for="minh">Min height</label>
-        <input type="range" id="minh" min="0" max="20" step="0.5" value="0">
-        <span class="val mono num" id="minhVal">0.0 m</span>
-      </div>
-      <div class="row">
-        <label for="maxw">Max width</label>
-        <input type="range" id="maxw" min="0.2" max="6" step="0.1" value="6">
-        <span class="val mono num" id="maxwVal">6.0 m</span>
-      </div>
-      <p class="note warn" id="hiddenNote"></p>
-    </div>
-
-    <div class="block" id="listBlock">
-      <span class="lbl">Clusters <span id="listCount" class="mono num"></span></span>
-      <div id="list"></div>
-      <div style="padding:11px 0 14px">
-        <button class="btn wide" id="copyVisible">Copy listed cluster ids</button>
-      </div>
     </div>
   </aside>
 
@@ -651,7 +688,6 @@ kbd {
         <button class="btn" type="button" id="agsCopyRedirect" style="flex:none">Copy</button>
       </div>
     </div>
-
 
     <div class="row">
       <span class="rl" id="agsWho">Not signed in.</span>
@@ -2200,7 +2236,7 @@ uniform highp usampler2D uSplatA;   // scale+opacity | rotation | colour+class |
 uniform highp usampler2D uSelTex;   // 1 where the splat is in the selection
 uniform highp usampler2D uFilterTex;
 uniform int uMode, uSelected, uPickMode, uHasSel;
-uniform float uDim;
+uniform float uDim, uOpacity;
 uniform vec3 uClassColour[16];
 uniform vec3 uSelColour;
 uniform float uClassOn[16];
@@ -2280,7 +2316,9 @@ vec4 shade(Splat s) {
   }
   if (s.picked) base = mix(base, uSelColour, 0.55);
   else if (s.inCluster) base = mix(base, vec3(1.0), 0.35);
-  return vec4(base, s.alpha);
+  // Whatever is lit keeps its opacity: fading the capture is for seeing
+  // past it, and fading the thing you are looking at with it defeats that.
+  return vec4(base, lit ? s.alpha : s.alpha * uOpacity);
 }
 
 mat3 rotationOf(vec4 q) {
@@ -2420,9 +2458,9 @@ function compile(type, src) {
 }
 
 const UNIFORMS = ["uSplatP", "uSplatA", "uSelTex", "uFilterTex", "uMode",
-                  "uSelected", "uPickMode", "uHasSel", "uDim", "uClassColour",
-                  "uSelColour", "uClassOn", "uView", "uProj", "uViewProj",
-                  "uViewport", "uFocal", "uPointScale", "uSpread"];
+                  "uSelected", "uPickMode", "uHasSel", "uDim", "uOpacity",
+                  "uClassColour", "uSelColour", "uClassOn", "uView", "uProj",
+                  "uViewProj", "uViewport", "uFocal", "uPointScale", "uSpread"];
 
 function buildProgram(vertSrc, fragSrc) {
   const p = gl.createProgram();
@@ -2631,6 +2669,7 @@ function frameBox(lo, hi) {
 
 /* --------------------------------------------------------------- state */
 let mode = 2, selected = -1, pointScale = 2, dim = 0.8, spread = 1.0;
+let opacity = 1.0;
 let drawMode = "splats";
 let clusters = [], listed = [];
 
@@ -2663,6 +2702,7 @@ function setCommonUniforms(prog, pickMode) {
   gl.uniform1f(u.uPointScale, pointScale);
   gl.uniform1f(u.uSpread, spread);
   gl.uniform1f(u.uDim, dim);
+  gl.uniform1f(u.uOpacity, drawMode === "splats" ? opacity : 1.0);
 
   const bind = (unit, tex, loc) => {
     gl.activeTexture(gl.TEXTURE0 + unit);
@@ -3039,7 +3079,16 @@ async function exportEdits() {
   }
 }
 
+let hadSelection = false;
+
 function refreshSelectionUI() {
+  // Edit is folded away until there is something to edit -- putting it
+  // before the review of what is actually there was the confusing part --
+  // and opens itself the first time a selection appears, so it is not a
+  // drawer nobody finds.
+  if (selCount && !hadSelection) $("editBlock").open = true;
+  hadSelection = selCount > 0;
+
   const el = $("selCount");
   el.classList.toggle("none", !selCount);
   el.textContent = selCount ? commas(selCount) + " splats" : "Nothing selected";
@@ -3194,27 +3243,58 @@ function drawOverlay() {
 function buildClasses(counts) {
   const host = $("classes");
   host.textContent = "";
+  const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
   CLASSES.forEach(c => {
     const key = c.name.toLowerCase();
     const n = counts[key] || 0;
-    const b = document.createElement("button");
-    b.className = n ? "cls" : "cls empty";
-    b.setAttribute("aria-pressed", String(!!classOn[c.index]));
-    b.innerHTML = `<span class="dot" style="background:${classCss(c)}"></span>` +
-                  `<span>${esc(c.name)}</span>` +
-                  `<span class="n mono num">${n ? commas(n) : ""}</span>`;
-    if (n) {
-      b.addEventListener("click", () => {
-        classOn[c.index] = classOn[c.index] ? 0 : 1;
-        b.setAttribute("aria-pressed", String(!!classOn[c.index]));
-        render();
-      });
-    } else {
-      b.disabled = true;
-      b.title = c.name + ": no splats carry this class in this file";
-    }
-    host.appendChild(b);
+    const row = document.createElement("div");
+    row.className = n ? "cls" : "cls empty";
+    row.setAttribute("aria-pressed", String(!!classOn[c.index]));
+
+    const take = document.createElement("button");
+    take.type = "button";
+    take.className = "cls-take";
+    take.disabled = !n;
+    take.title = n ? "Select the " + commas(n) + " splats in " + c.name
+                   : c.name + ": nothing in this file carries it";
+    take.innerHTML =
+      `<span class="dot" style="background:${classCss(c)}"></span>` +
+      `<span class="nm">${esc(c.name)}</span>` +
+      `<span class="n mono num">${n ? commas(n) : ""}</span>` +
+      `<span class="bar" style="width:${(100 * n / total).toFixed(1)}%;` +
+      `background:${classCss(c)}"></span>`;
+    take.addEventListener("click", () => selectClass(c.code));
+
+    const eye = document.createElement("button");
+    eye.type = "button";
+    eye.className = "cls-eye";
+    eye.disabled = !n;
+    eye.setAttribute("aria-pressed", String(!!classOn[c.index]));
+    eye.title = "Show or hide " + c.name;
+    eye.textContent = classOn[c.index] ? "\u25c9" : "\u25cb";
+    eye.addEventListener("click", () => {
+      classOn[c.index] = classOn[c.index] ? 0 : 1;
+      eye.setAttribute("aria-pressed", String(!!classOn[c.index]));
+      eye.textContent = classOn[c.index] ? "\u25c9" : "\u25cb";
+      row.setAttribute("aria-pressed", String(!!classOn[c.index]));
+      render();
+    });
+
+    row.appendChild(take);
+    row.appendChild(eye);
+    host.appendChild(row);
   });
+}
+
+// Selecting a whole class honours Combine, so classes can be added together
+// the same way anything else is.
+function selectClass(code) {
+  if (!scene) return;
+  const out = [];
+  for (let i = 0; i < pointCount; i++) {
+    if (scene.klass[i] === code && !scene.dead[i]) out.push(i);
+  }
+  sendRegion({ cmd: "indices", mode: setop, list: Uint32Array.from(out) });
 }
 
 function buildAssign() {
@@ -3320,6 +3400,7 @@ const LIST_CAP = 400;
 function drawList() {
   const host = $("list");
   host.textContent = "";
+  $("selectListed").disabled = !listed.length;
   $("listCount").textContent = listed.length > LIST_CAP
     ? `(${commas(LIST_CAP)} of ${commas(listed.length)})`
     : `(${listed.length})`;
@@ -3334,7 +3415,11 @@ function drawList() {
       `<span class="id mono">#${c.id}</span>` +
       `<span class="h mono num">${fmt(c.height)} m</span>` +
       `<span class="w mono num">${fmt(c.width)} m</span>`;
-    b.addEventListener("click", () => select(c.id, true));
+    b.addEventListener("click", (e) => {
+      select(c.id, e.altKey === false && e.shiftKey === false);
+      sendRegion({ cmd: "indices", mode: modeFor(e),
+                   list: indicesOfCluster(c.id) });
+    });
     frag.appendChild(b);
   }
   host.appendChild(frag);
@@ -3587,6 +3672,8 @@ segButtons("draw", d => {
   drawMode = d.draw;
   $("psizeRow").hidden = drawMode !== "points";
   $("spreadRow").hidden = drawMode !== "splats";
+  // Transparency is alpha blending, which the points path does not do.
+  $("opacityRow").hidden = drawMode !== "splats";
   invalidate(true);
 });
 function updateSelHint() {
@@ -3625,6 +3712,8 @@ function slider(id, valId, format, apply) {
 slider("spread", "spreadVal", v => fmt(v, 2), v => { spread = v; invalidate(false); });
 slider("psize", "psizeVal", v => fmt(v, 1), v => { pointScale = v; invalidate(false); });
 slider("isolate", "isolateVal", v => fmt(v, 2), v => { dim = v; invalidate(false); });
+slider("opacity", "opacityVal", v => (v >= 1 ? "solid" : fmt(v, 2)),
+       v => { opacity = v; invalidate(false); });
 slider("brush", "brushVal", v => v.toFixed(0) + " px", v => { brushRadius = v; drawOverlay(); });
 slider("minh", "minhVal", v => fmt(v, 1) + " m", () => applyFilters());
 slider("maxw", "maxwVal", v => fmt(v, 1) + " m", () => applyFilters());
@@ -3681,6 +3770,15 @@ function copy(text, button, done, rest) {
 }
 $("copyId").addEventListener("click", e =>
   copy(String(selected), e.target, "Copied", "Copy id"));
+$("selectListed").addEventListener("click", () => {
+  if (!scene || !listed.length) return;
+  const wanted = new Set(listed.map(c => c.id));
+  const out = [];
+  for (let i = 0; i < pointCount; i++) {
+    if (!scene.dead[i] && wanted.has(scene.cluster[i])) out.push(i);
+  }
+  sendRegion({ cmd: "indices", mode: setop, list: Uint32Array.from(out) });
+});
 $("copyVisible").addEventListener("click", e =>
   copy(JSON.stringify(listed.map(c => c.id)), e.target,
        `Copied ${listed.length} ids`, "Copy listed cluster ids"));
