@@ -641,13 +641,17 @@ kbd {
         </div>
         <div class="row">
           <label for="agsClient" style="flex:none;width:66px">Client id</label>
-          <input type="text" id="agsClient" spellcheck="false"
-                 placeholder="xxxxxxxxxxxxxxxx">
+          <input type="password" id="agsClient" spellcheck="false"
+                 autocomplete="off" placeholder="xxxxxxxxxxxxxxxx">
+          <button class="btn" type="button" id="agsReveal" style="flex:none"
+                  aria-pressed="false" title="Show what is typed here">Show</button>
         </div>
         <p class="note">For ArcGIS Enterprise, put your portal address in
           instead &mdash; <code>https://gis.example.com/portal</code>.</p>
         <div class="pair">
           <button class="btn" type="button" id="agsSave">Save</button>
+          <button class="btn" type="button" id="agsClear" hidden
+                  title="Forget the values this browser has stored and go back to the deployment's">Clear override</button>
         </div>
       </div>
     </details>
@@ -4131,13 +4135,33 @@ function agsPaint() {
     ? "This deployment already has a client id, registered against " +
       "<strong>" + esc(AGS_PORTAL) + "</strong>. Fill these in only to sign " +
       "in against a different portal." : "";
-  $("agsPortal").value = localStorage.getItem(AGS_STORE + "portal") || "";
+  const overridePortal = localStorage.getItem(AGS_STORE + "portal") || "";
+  const overrideClient = localStorage.getItem(AGS_STORE + "clientId") || "";
+  $("agsPortal").value = overridePortal;
   $("agsPortal").placeholder = AGS_PORTAL;
-  $("agsClient").value = localStorage.getItem(AGS_STORE + "clientId") || "";
+  // Masked by default. An app id is not a credential -- the browser sends it
+  // to the portal on every sign-in -- but there is no reason to put it on
+  // screen, in a screen share, or in a screenshot either.
+  $("agsClient").value = overrideClient;
   $("agsClient").placeholder = AGS_CLIENT
     ? "using this deployment's client id" : "xxxxxxxxxxxxxxxx";
+  $("agsClear").hidden = !(overridePortal || overrideClient);
   $("agsRedirect").textContent = agsRedirectUri();
+  if (AGS_CLIENT && overrideClient === AGS_CLIENT) {
+    $("agsNote").textContent =
+      "That is the same client id this deployment already uses, so the " +
+      "override changes nothing. Clear it to stop storing a copy.";
+  }
   if (!on) $("agsResults").textContent = "";
+}
+
+function agsClearOverride() {
+  localStorage.removeItem(AGS_STORE + "portal");
+  localStorage.removeItem(AGS_STORE + "clientId");
+  $("agsNote").textContent = AGS_CLIENT
+    ? "Cleared. Back to the deployment's own settings."
+    : "Cleared.";
+  agsPaint();
 }
 
 // Empty means "no override", which is different from an empty client id.
@@ -4158,6 +4182,14 @@ $("railArcgis").addEventListener("click", () => { agsPaint(); $("agsDlg").showMo
 $("emptyArcgis").addEventListener("click", () => $("railArcgis").click());
 $("agsClose").addEventListener("click", () => $("agsDlg").close());
 $("agsSave").addEventListener("click", agsSaveSettings);
+$("agsClear").addEventListener("click", agsClearOverride);
+$("agsReveal").addEventListener("click", e => {
+  const field = $("agsClient");
+  const shown = field.type === "text";
+  field.type = shown ? "password" : "text";
+  e.target.textContent = shown ? "Show" : "Hide";
+  e.target.setAttribute("aria-pressed", String(!shown));
+});
 $("agsSignIn").addEventListener("click", () => { agsSaveSettings(); agsSignIn(); });
 $("agsSignOut").addEventListener("click", agsSignOut);
 $("agsFind").addEventListener("click", agsSearch);
