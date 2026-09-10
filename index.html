@@ -621,8 +621,9 @@ kbd {
     </p>
 
     <details class="block" id="agsSetup" style="padding:12px 14px;border:1px solid var(--line);border-radius:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
-      <summary>One-time setup</summary>
+      <summary id="agsSetupLabel">One-time setup</summary>
       <div>
+        <p class="note" id="agsConfigured" hidden></p>
         <p class="note" style="margin-top:0">
           Register an OAuth application in your organization
           (<strong>Content &rarr; New item &rarr; Developer credentials &rarr;
@@ -3883,9 +3884,29 @@ if (gl) {
 // access token does not: it goes in sessionStorage, so closing the tab ends
 // the session, and it is never written into a URL this page keeps.
 const AGS_STORE = "splat.arcgis.";
+
+// Substituted at deploy time by viewer/publish_site.py from viewer/.env.local,
+// which is in neither repository. Same names as the other apps use, so there
+// is one convention rather than two. A client id is not a secret -- the browser
+// has to hand it to the portal, so anyone can read it off the wire -- but
+// keeping it out of source means it can be rotated without a commit, and the
+// redirect allowlist on the registered app is what actually confines where a
+// token can end up. Left unsubstituted, the page falls back to asking.
+const AGS_BUILD_CLIENT_ID = "__VITE_ARCGIS_OAUTH_APP_ID__";
+const AGS_BUILD_PORTAL = "https://www.arcgis.com";
+const agsBuilt = (value) => (/^__[A-Z0-9_]+__$/.test(value) ? "" : value);
+const AGS_CLIENT = agsBuilt(AGS_BUILD_CLIENT_ID);
+const AGS_PORTAL = agsBuilt(AGS_BUILD_PORTAL) || "https://www.arcgis.com";
+
+// An override is for someone pointing this at a different organization, so
+// it is stored separately and only wins when it is actually set.
 const ags = {
-  portal: localStorage.getItem(AGS_STORE + "portal") || "https://www.arcgis.com",
-  clientId: localStorage.getItem(AGS_STORE + "clientId") || "",
+  get portal() {
+    return localStorage.getItem(AGS_STORE + "portal") || AGS_PORTAL;
+  },
+  get clientId() {
+    return localStorage.getItem(AGS_STORE + "clientId") || AGS_CLIENT;
+  },
   token: null, username: null, expires: 0
 };
 
@@ -4095,24 +4116,41 @@ function agsPaint() {
   const on = agsSignedIn();
   $("agsWho").innerHTML = on
     ? "Signed in as <strong>" + esc(ags.username) + "</strong>"
-    : "Not signed in.";
+    : (AGS_CLIENT ? "Sign in with your ArcGIS account." : "Not configured yet.");
   $("agsSignIn").hidden = on;
   $("agsSignOut").hidden = !on;
   $("agsFind").hidden = !on;
+
+  // A configured deployment should not open on a form nobody has to fill in.
   $("agsSetup").open = !ags.clientId;
-  $("agsPortal").value = ags.portal;
-  $("agsClient").value = ags.clientId;
+  $("agsSetup").hidden = false;
+  $("agsSetupLabel").textContent = AGS_CLIENT
+    ? "Use a different organization" : "One-time setup";
+  $("agsConfigured").hidden = !AGS_CLIENT;
+  $("agsConfigured").innerHTML = AGS_CLIENT
+    ? "This deployment already has a client id, registered against " +
+      "<strong>" + esc(AGS_PORTAL) + "</strong>. Fill these in only to sign " +
+      "in against a different portal." : "";
+  $("agsPortal").value = localStorage.getItem(AGS_STORE + "portal") || "";
+  $("agsPortal").placeholder = AGS_PORTAL;
+  $("agsClient").value = localStorage.getItem(AGS_STORE + "clientId") || "";
+  $("agsClient").placeholder = AGS_CLIENT
+    ? "using this deployment's client id" : "xxxxxxxxxxxxxxxx";
   $("agsRedirect").textContent = agsRedirectUri();
   if (!on) $("agsResults").textContent = "";
 }
 
+// Empty means "no override", which is different from an empty client id.
 function agsSaveSettings() {
-  ags.portal = $("agsPortal").value.trim() || "https://www.arcgis.com";
-  ags.clientId = $("agsClient").value.trim();
-  localStorage.setItem(AGS_STORE + "portal", ags.portal);
-  localStorage.setItem(AGS_STORE + "clientId", ags.clientId);
+  const portal = $("agsPortal").value.trim();
+  const client = $("agsClient").value.trim();
+  for (const [key, value] of [["portal", portal], ["clientId", client]]) {
+    if (value) localStorage.setItem(AGS_STORE + key, value);
+    else localStorage.removeItem(AGS_STORE + key);
+  }
   $("agsNote").textContent = ags.clientId
-    ? "Saved. Sign in when you are ready." : "";
+    ? "Saved. Sign in when you are ready."
+    : "Still no client id, so sign-in cannot start.";
   agsPaint();
 }
 
