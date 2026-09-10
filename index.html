@@ -140,6 +140,27 @@ details.block > summary::before {
 details.block[open] > summary::before { transform: rotate(90deg); }
 details.block > summary + * { margin-top: 10px; }
 
+/* The rail reads top to bottom as the job: load, segment, select, edit,
+   export. The numbers are there because the order is the instruction. */
+.step > .lbl, details.step > summary { color: var(--ink); }
+.step > .lbl b, details.step > summary b {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 3px; margin-right: 8px;
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+details.step > summary::before { display: none; }
+details.step > summary::after {
+  content: "\25B8"; font-size: 9px; color: var(--ink-faint);
+  margin-left: auto; transition: transform .12s;
+}
+details.step[open] > summary::after { transform: rotate(90deg); }
+.sublbl {
+  display: block; margin: 12px 0 5px;
+  font-size: 11px; color: var(--ink-dim);
+}
+.rl { flex: 1; font-size: 12px; color: var(--ink-dim); }
+
 .classes { display: flex; flex-direction: column; gap: 2px; }
 .cls {
   display: grid;
@@ -322,14 +343,6 @@ button:focus-visible, .item:focus-visible, .cls:focus-visible,
 input:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
-.file {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 6px 11px; border-radius: 5px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--raised);
-  font-size: 12px; white-space: nowrap;
-}
-.file:hover { border-color: var(--accent); }
-.file input { display: none; }
 input[type=text], input[type=url], select {
   width: 100%; padding: 6px 9px; font: inherit; font-size: 12px;
   border: 1px solid var(--line); border-radius: 4px;
@@ -350,11 +363,6 @@ kbd {
       <span class="rule"></span>
       <h1>Splat Segment Inspector</h1>
     </div>
-    <label class="file">
-      <input type="file" id="pick" multiple>
-      Open file
-    </label>
-    <button class="file" id="openUrl" type="button">Open 3D Tiles URL</button>
     <div class="meta">
       <div><span class="lbl">Points</span><dd class="mono num" id="mPoints">&mdash;</dd></div>
       <div><span class="lbl">Clusters</span><dd class="mono num" id="mClusters">&mdash;</dd></div>
@@ -364,94 +372,18 @@ kbd {
   </header>
 
   <aside id="rail">
-    <div class="block" id="selBlock">
-      <span class="lbl">Selection</span>
-      <div class="row">
-        <span id="selCount" class="mono num none">Nothing selected</span>
-      </div>
-      <div class="seg small" id="tool" style="margin-top:10px">
-        <button data-tool="pick" aria-pressed="true" title="Click a splat to take its whole cluster">Cluster</button>
-        <button data-tool="box" aria-pressed="false" title="Drag a rectangle">Box</button>
-        <button data-tool="lasso" aria-pressed="false" title="Draw a freehand outline">Lasso</button>
-        <button data-tool="brush" aria-pressed="false" title="Paint splats in a circle">Brush</button>
-      </div>
-      <div class="row" style="margin-top:9px">
-        <span class="lbl" style="flex:1;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-dim)">Combine</span>
-        <div class="seg small" id="setop" style="flex:1.9">
-          <button data-op="replace" aria-pressed="true" title="Each pick starts a new selection  (R)">Replace</button>
-          <button data-op="add" aria-pressed="false" title="Every pick adds to what is already selected  (A)">Add</button>
-          <button data-op="sub" aria-pressed="false" title="Every pick removes from what is already selected  (S)">Subtract</button>
-        </div>
-      </div>
-      <div class="row" style="margin-top:9px" id="brushRow" hidden>
-        <label for="brush">Brush radius</label>
-        <input type="range" id="brush" min="8" max="220" step="2" value="46">
-        <span class="val mono num" id="brushVal">46 px</span>
-      </div>
-      <div class="row" style="margin-top:9px" id="reachRow" hidden>
-        <span class="lbl" style="flex:1;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-dim)">Reaches</span>
-        <div class="seg small" id="reach" style="flex:1.6">
-          <button data-reach="volume" aria-pressed="true" title="Every splat inside the outline, however deep">Through</button>
-          <button data-reach="surface" aria-pressed="false" title="Only the splats you can actually see">Visible</button>
-        </div>
-      </div>
-      <p class="note" id="selHint">Drag to select. Hold <kbd>Shift</kbd> to add, <kbd>Alt</kbd> to subtract.</p>
-
-      <span class="lbl" style="display:block;margin:12px 0 6px">Set selected splats to</span>
-      <div class="assign" id="assign"></div>
+    <div class="block step">
+      <span class="lbl"><b>1</b>Load a capture</span>
+      <input type="file" id="pick" multiple hidden>
       <div class="pair">
-        <button class="btn" id="newCluster" disabled title="Give the selection a cluster id of its own">Split off</button>
-        <button class="btn" id="mergeCluster" disabled title="Give the whole selection one cluster id">Merge</button>
+        <button class="btn" type="button" id="railFile">Open file</button>
+        <button class="btn" type="button" id="openUrl">3D Tiles URL</button>
       </div>
-      <div class="pair">
-        <button class="btn" id="undo" disabled>Undo</button>
-        <button class="btn" id="redo" disabled>Redo</button>
-        <button class="btn" id="clearSelBtn" disabled>Deselect</button>
-      </div>
-      <div class="pair">
-        <button class="btn go wide" id="exportEdits" disabled>Export edits</button>
-      </div>
-      <p class="note" id="editNote"></p>
+      <p class="note" id="loadedNote">Nothing loaded yet.</p>
     </div>
 
-    <div class="block">
-      <span class="lbl">Classes</span>
-      <div class="classes" id="classes"></div>
-    </div>
-
-    <div class="block">
-      <span class="lbl">Draw as</span>
-      <div class="seg" id="draw">
-        <button data-draw="splats" aria-pressed="true">Gaussians</button>
-        <button data-draw="points" aria-pressed="false">Points</button>
-      </div>
-      <div class="row" style="margin-top:11px" id="spreadRow">
-        <label for="spread">Splat size</label>
-        <input type="range" id="spread" min="0.3" max="2.5" step="0.05" value="1">
-        <span class="val mono num" id="spreadVal">1.00</span>
-      </div>
-      <div class="row" id="psizeRow" hidden>
-        <label for="psize">Point size</label>
-        <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
-        <span class="val mono num" id="psizeVal">2.0</span>
-      </div>
-      <div class="row" style="margin-top:11px">
-        <label for="mode">Colour by</label>
-      </div>
-      <div class="seg" id="mode">
-        <button data-mode="0" aria-pressed="false">Class</button>
-        <button data-mode="1" aria-pressed="false">Cluster</button>
-        <button data-mode="2" aria-pressed="true">Capture</button>
-      </div>
-      <div class="row" style="margin-top:11px">
-        <label for="isolate">Dim unselected</label>
-        <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
-        <span class="val mono num" id="isolateVal">0.80</span>
-      </div>
-    </div>
-
-    <details class="block" id="segBlock">
-      <summary>Segment this cloud</summary>
+    <details class="block step" id="segBlock">
+      <summary><b>2</b>Segment it</summary>
       <div>
         <div class="row">
           <label for="pMinH">Min column height</label>
@@ -474,13 +406,116 @@ kbd {
           <span class="val mono num" id="pCellVal">0.30 m</span>
         </div>
         <div class="pair" style="margin-top:11px">
-          <button class="btn go wide" id="runSegment">Run segmentation</button>
+          <button class="btn go wide" id="runSegment" disabled>Run segmentation</button>
         </div>
-        <p class="note" id="segNote">Runs the same rules as
-          <code>splat-tiles segment</code>, here in the browser. It replaces
-          every class and cluster, so export any edits first.</p>
+        <p class="note" id="segNote">The same rules as
+          <code>splat-tiles segment</code>, run here. It replaces every class
+          and cluster, so export any edits first.</p>
       </div>
     </details>
+
+    <div class="block step" id="selBlock">
+      <span class="lbl"><b>3</b>Select splats</span>
+      <div class="row">
+        <span id="selCount" class="mono num none">Nothing selected</span>
+      </div>
+      <div class="seg small" id="tool" style="margin-top:10px">
+        <button data-tool="pick" aria-pressed="true" title="Click a splat to take its whole cluster">Cluster</button>
+        <button data-tool="box" aria-pressed="false" title="Drag a rectangle">Box</button>
+        <button data-tool="lasso" aria-pressed="false" title="Draw a freehand outline">Lasso</button>
+        <button data-tool="brush" aria-pressed="false" title="Paint splats in a circle">Brush</button>
+      </div>
+      <div class="row" style="margin-top:9px">
+        <span class="rl">Combine</span>
+        <div class="seg small" id="setop" style="flex:1.9">
+          <button data-op="replace" aria-pressed="true" title="Each pick starts a new selection  (R)">Replace</button>
+          <button data-op="add" aria-pressed="false" title="Every pick adds to what is already selected  (A)">Add</button>
+          <button data-op="sub" aria-pressed="false" title="Every pick removes from what is already selected  (S)">Subtract</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:9px" id="brushRow" hidden>
+        <label for="brush">Brush radius</label>
+        <input type="range" id="brush" min="8" max="220" step="2" value="46">
+        <span class="val mono num" id="brushVal">46 px</span>
+      </div>
+      <div class="row" style="margin-top:9px" id="reachRow" hidden>
+        <span class="rl">Reaches</span>
+        <div class="seg small" id="reach" style="flex:1.9">
+          <button data-reach="volume" aria-pressed="true" title="Every splat inside the outline, however deep">Through</button>
+          <button data-reach="surface" aria-pressed="false" title="Only the splats you can actually see">Visible</button>
+        </div>
+      </div>
+      <p class="note" id="selHint">Drag to select.</p>
+    </div>
+
+    <div class="block step">
+      <span class="lbl"><b>4</b>Edit</span>
+      <span class="sublbl">Set selected splats to</span>
+      <div class="assign" id="assign"></div>
+      <span class="sublbl">Cluster</span>
+      <div class="pair">
+        <button class="btn" id="newCluster" disabled title="Give the selection a cluster id of its own">Split off</button>
+        <button class="btn" id="mergeCluster" disabled title="Give the whole selection one cluster id">Merge</button>
+      </div>
+      <span class="sublbl">Crop</span>
+      <div class="pair">
+        <button class="btn" id="cropDelete" disabled title="Take the selected splats out of the cloud">Delete selected</button>
+        <button class="btn" id="cropKeep" disabled title="Take everything except the selection out of the cloud">Keep only</button>
+      </div>
+      <p class="note" id="cropNote"></p>
+      <div class="pair" style="margin-top:10px">
+        <button class="btn" id="undo" disabled>Undo</button>
+        <button class="btn" id="redo" disabled>Redo</button>
+        <button class="btn" id="clearSelBtn" disabled>Deselect</button>
+      </div>
+    </div>
+
+    <div class="block step">
+      <span class="lbl"><b>5</b>Export</span>
+      <div class="pair">
+        <button class="btn go wide" id="exportEdits" disabled>Export edits</button>
+      </div>
+      <p class="note" id="editNote"></p>
+      <p class="note">Replay it onto the PLY with
+        <code>splat-tiles relabel</code>, or <strong>Apply Splat Edits</strong>
+        in the Pro toolbox, and publish from there.</p>
+    </div>
+
+    <div class="block">
+      <span class="lbl">Classes</span>
+      <div class="classes" id="classes"></div>
+    </div>
+
+    <div class="block">
+      <span class="lbl">Display</span>
+      <div class="seg" id="draw">
+        <button data-draw="splats" aria-pressed="true">Gaussians</button>
+        <button data-draw="points" aria-pressed="false">Points</button>
+      </div>
+      <div class="row" style="margin-top:11px" id="spreadRow">
+        <label for="spread">Splat size</label>
+        <input type="range" id="spread" min="0.3" max="2.5" step="0.05" value="1">
+        <span class="val mono num" id="spreadVal">1.00</span>
+      </div>
+      <div class="row" id="psizeRow" hidden>
+        <label for="psize">Point size</label>
+        <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
+        <span class="val mono num" id="psizeVal">2.0</span>
+      </div>
+      <div class="row" style="margin-top:11px">
+        <span class="rl">Colour by</span>
+        <div class="seg small" id="mode" style="flex:1.9">
+          <button data-mode="0" aria-pressed="false">Class</button>
+          <button data-mode="1" aria-pressed="false">Cluster</button>
+          <button data-mode="2" aria-pressed="true">Capture</button>
+        </div>
+      </div>
+      <div class="row">
+        <label for="isolate">Dim unselected</label>
+        <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
+        <span class="val mono num" id="isolateVal">0.80</span>
+      </div>
+    </div>
 
     <div class="block">
       <span class="lbl">Filter columns</span>
@@ -498,7 +533,7 @@ kbd {
     </div>
 
     <div class="block" id="listBlock">
-      <span class="lbl">Clusters shown <span id="listCount" class="mono num"></span></span>
+      <span class="lbl">Clusters <span id="listCount" class="mono num"></span></span>
       <div id="list"></div>
       <div style="padding:11px 0 14px">
         <button class="btn wide" id="copyVisible">Copy listed cluster ids</button>
@@ -595,6 +630,7 @@ kbd {
 let pos = null;          // Float32Array(n*3), world
 let klass = null;        // Uint8Array(n), class codes
 let cluster = null;      // Int32Array(n)
+let dead = null;         // Uint8Array(n), 1 where a crop removed the splat
 let sel = null;          // Uint8Array(n), the live selection
 let n = 0;
 
@@ -666,7 +702,7 @@ function region(msg) {
   if (msg.mode === "replace") sel.fill(0);
 
   for (let i = 0; i < n; i++) {
-    if (!visClass[klass[i]]) continue;
+    if (dead[i] || !visClass[klass[i]]) continue;
     const cid = cluster[i];
     if (cid >= 0 && cid < filter.length && !filter[cid]) continue;
     const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
@@ -702,14 +738,14 @@ onmessage = (e) => {
   switch (msg.cmd) {
     case "scene": {
       pos = msg.pos; klass = msg.klass; cluster = msg.cluster;
-      n = msg.n;
+      dead = msg.dead; n = msg.n;
       sel = new Uint8Array(n);
       depth = null; out = null;
       postMessage({ type: "ready" });
       break;
     }
     case "classes": {
-      klass = msg.klass; cluster = msg.cluster;
+      klass = msg.klass; cluster = msg.cluster; dead = msg.dead;
       break;
     }
     case "setsel": {
@@ -735,7 +771,7 @@ onmessage = (e) => {
       if (!pos) break;
       if (msg.mode === "replace") sel.fill(0);
       const list = msg.list, v = msg.mode === "sub" ? 0 : 1;
-      for (let i = 0; i < list.length; i++) sel[list[i]] = v;
+      for (let i = 0; i < list.length; i++) if (!dead[list[i]]) sel[list[i]] = v;
       let count = 0;
       for (let i = 0; i < n; i++) if (sel[i]) count++;
       const copy = sel.slice();
@@ -1952,12 +1988,18 @@ function parseLabelledPly(buffer, budget) {
 function measure(target) {
   const { position, klass, cluster } = target;
   const n = target.header.points;
+  // A cropped splat is gone as far as every count, cluster and class total
+  // is concerned; it is only still in the arrays so the crop can be undone.
+  const dead = target.dead;
   const stats = new Map();
   const counts = {};
+  let live = 0;
   // Register before naming: a relabelled PLY can arrive carrying codes this
   // table has never seen, and they must not all read as unclassified.
   for (let i = 0; i < n; i++) if (!knownClass(klass[i])) ensureClass(klass[i]);
   for (let i = 0; i < n; i++) {
+    if (dead && dead[i]) continue;
+    live++;
     const name = classOf(klass[i]).name.toLowerCase();
     counts[name] = (counts[name] || 0) + 1;
     const id = cluster[i];
@@ -1977,6 +2019,7 @@ function measure(target) {
       e.sum[k] += v;
     }
   }
+  target.header.live = live;
   target.header.classCounts = counts;
   target.header.clusters = [...stats.values()].map(e => {
     let best = 0, bestN = -1;
@@ -2069,7 +2112,10 @@ Splat readSplat(int index) {
   s.colour = vec3(float(A.b & 0xffu), float((A.b >> 8) & 0xffu),
                   float((A.b >> 16) & 0xffu)) / 255.0;
   s.klass = int((A.b >> 24) & 0xffu);
-  s.cluster = int(A.a) - 1;
+  // Top bit of the cluster word is the crop flag; cluster ids never reach
+  // 2^31, so it costs nothing and saves a fifth texture.
+  bool cropped = (A.a & 0x80000000u) != 0u;
+  s.cluster = int(A.a & 0x7fffffffu) - 1;
 
   s.picked = texelFetch(uSelTex, at, 0).r != 0u;
   s.inCluster = (uSelected >= 0 && s.cluster == uSelected);
@@ -2078,7 +2124,7 @@ Splat readSplat(int index) {
     ivec2 f = ivec2(s.cluster % 1024, s.cluster / 1024);
     filtered = texelFetch(uFilterTex, f, 0).r == 0u;
   }
-  s.visible = s.inCluster || (uClassOn[s.klass] > 0.5 && !filtered);
+  s.visible = !cropped && (s.inCluster || (uClassOn[s.klass] > 0.5 && !filtered));
   return s;
 }
 
@@ -2319,6 +2365,7 @@ function uploadFilter() {
 function packAttributes() {
   const A = new Uint32Array(TEX_W * texRows * 4);
   const { colour, klass, cluster, scale, rot, opacity } = scene;
+  const dead = scene.dead;
   for (let i = 0; i < pointCount; i++) {
     A[i * 4] = scale[i * 3] | (scale[i * 3 + 1] << 8) |
                (scale[i * 3 + 2] << 16) | (opacity[i] << 24);
@@ -2326,7 +2373,7 @@ function packAttributes() {
                    (rot[i * 4 + 2] << 16) | (rot[i * 4 + 3] << 24);
     A[i * 4 + 2] = colour[i * 3] | (colour[i * 3 + 1] << 8) |
                    (colour[i * 3 + 2] << 16) | (CODE_TO_INDEX[klass[i]] << 24);
-    A[i * 4 + 3] = cluster[i] + 1;
+    A[i * 4 + 3] = (cluster[i] + 1) | (dead[i] ? 0x80000000 : 0);
   }
   gl.bindTexture(gl.TEXTURE_2D, texA);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32UI, TEX_W, texRows, 0,
@@ -2348,6 +2395,10 @@ function upload(next) {
   scene = next;
   pointCount = scene.header.points;
   texRows = Math.max(1, Math.ceil(pointCount / TEX_W));
+  // Before packAttributes, which reads it.
+  if (!scene.dead || scene.dead.length !== pointCount) {
+    scene.dead = new Uint8Array(pointCount);
+  }
 
   const P = new Float32Array(TEX_W * texRows * 4);
   for (let i = 0; i < pointCount; i++) {
@@ -2375,15 +2426,17 @@ function upload(next) {
   // depth sort and for region tests, labels so a selection can never pick up
   // something hidden.
   const pos = scene.position.slice(), kl = scene.klass.slice();
-  const cl = scene.cluster.slice();
-  sortWorker.postMessage({ cmd: "scene", n: pointCount, pos, klass: kl, cluster: cl },
-                         [pos.buffer, kl.buffer, cl.buffer]);
+  const cl = scene.cluster.slice(), dd = scene.dead.slice();
+  sortWorker.postMessage({ cmd: "scene", n: pointCount, pos, klass: kl,
+                           cluster: cl, dead: dd },
+                         [pos.buffer, kl.buffer, cl.buffer, dd.buffer]);
 }
 
 function pushLabels() {
   const kl = scene.klass.slice(), cl = scene.cluster.slice();
-  sortWorker.postMessage({ cmd: "classes", klass: kl, cluster: cl },
-                         [kl.buffer, cl.buffer]);
+  const dd = scene.dead.slice();
+  sortWorker.postMessage({ cmd: "classes", klass: kl, cluster: cl, dead: dd },
+                         [kl.buffer, cl.buffer, dd.buffer]);
 }
 
 /* ---------------------------------------------------------- depth sort */
@@ -2609,14 +2662,17 @@ function pick(px, py) {
 // splat indices per class, which `splat-tiles relabel` (or the Apply Splat
 // Edits tool) replays onto the PLY. Kilobytes even for an edit touching a
 // million splats, and the PLY stays the single source of truth.
-let origKlass = null, origCluster = null, changedCount = 0;
+let origKlass = null, origCluster = null, origDead = null;
+let changedCount = 0, croppedCount = 0;
 const undoStack = [], redoStack = [];
 const MAX_UNDO = 40;
 
 function snapshot() {
   origKlass = scene.klass.slice();
   origCluster = scene.cluster.slice();
+  origDead = scene.dead.slice();
   changedCount = 0;
+  croppedCount = 0;
   undoStack.length = 0;
   redoStack.length = 0;
 }
@@ -2628,15 +2684,21 @@ function selectedIndices() {
   return out.subarray(0, k);
 }
 
-function applyEdit(idx, nextK, nextC) {
+// One shape for every edit: the rows it touched, and what each of the three
+// per-splat facts was before and after. Undo is then the same code path run
+// the other way, which is why a crop needs no machinery of its own.
+function applyEdit(idx, nextK, nextC, nextD) {
   const prevK = new Uint8Array(idx.length);
   const prevC = new Int32Array(idx.length);
+  const prevD = new Uint8Array(idx.length);
   for (let j = 0; j < idx.length; j++) {
     prevK[j] = scene.klass[idx[j]];
     prevC[j] = scene.cluster[idx[j]];
+    prevD[j] = scene.dead[idx[j]];
   }
-  const entry = { idx: Uint32Array.from(idx), prevK, prevC,
-                  nextK: Uint8Array.from(nextK), nextC: Int32Array.from(nextC) };
+  const entry = { idx: Uint32Array.from(idx), prevK, prevC, prevD,
+                  nextK: Uint8Array.from(nextK), nextC: Int32Array.from(nextC),
+                  nextD: Uint8Array.from(nextD || prevD) };
   undoStack.push(entry);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   redoStack.length = 0;
@@ -2646,9 +2708,11 @@ function applyEdit(idx, nextK, nextC) {
 function writeEdit(entry, undo) {
   const k = undo ? entry.prevK : entry.nextK;
   const c = undo ? entry.prevC : entry.nextC;
+  const d = undo ? entry.prevD : entry.nextD;
   for (let j = 0; j < entry.idx.length; j++) {
     scene.klass[entry.idx[j]] = k[j];
     scene.cluster[entry.idx[j]] = c[j];
+    scene.dead[entry.idx[j]] = d[j];
   }
   afterLabelChange();
 }
@@ -2656,17 +2720,21 @@ function writeEdit(entry, undo) {
 function afterLabelChange() {
   // The diff against the loaded labels is what gets exported, so it is
   // counted here rather than recomputed every time the selection moves.
-  let n = 0;
+  let n = 0, gone = 0;
   for (let i = 0; i < pointCount; i++) {
-    if (scene.klass[i] !== origKlass[i] || scene.cluster[i] !== origCluster[i]) n++;
+    if (scene.dead[i]) gone++;
+    if (scene.klass[i] !== origKlass[i] || scene.cluster[i] !== origCluster[i] ||
+        scene.dead[i] !== origDead[i]) n++;
   }
   changedCount = n;
+  croppedCount = gone;
   measure(scene);
   packAttributes();
   pushLabels();
   clusters = scene.header.clusters;
   buildClasses(scene.header.classCounts);
   buildAssign();
+  showPointCount();
   rebuildFilterFlags();
   applyFilters();
   refreshSelectionUI();
@@ -2706,6 +2774,41 @@ function assignCluster(mode) {
   setTimeout(hush, 2600);
 }
 
+// Crop is a soft delete: the rows stay in the arrays so undo can put them
+// back, and everything that counts, clusters or draws skips them. Only the
+// export turns it into a real deletion.
+function cropSelection(keepSelected) {
+  const idx = [];
+  for (let i = 0; i < pointCount; i++) {
+    if (scene.dead[i]) continue;
+    if (keepSelected ? !sel[i] : !!sel[i]) idx.push(i);
+  }
+  if (!idx.length) return;
+  if (idx.length === liveCount()) {
+    say("That would remove every splat. Nothing done.", true);
+    setTimeout(hush, 3500);
+    return;
+  }
+  const list = Uint32Array.from(idx);
+  const nextK = new Uint8Array(list.length);
+  const nextC = new Int32Array(list.length);
+  for (let j = 0; j < list.length; j++) {
+    nextK[j] = scene.klass[list[j]];
+    nextC[j] = scene.cluster[list[j]];
+  }
+  applyEdit(list, nextK, nextC, new Uint8Array(list.length).fill(1));
+  clearSelection();
+  say(`${commas(list.length)} splats cropped away; ` +
+      `${commas(liveCount())} remain.`);
+  setTimeout(hush, 3000);
+}
+
+function liveCount() {
+  let live = 0;
+  for (let i = 0; i < pointCount; i++) if (!scene.dead[i]) live++;
+  return live;
+}
+
 function toRanges(list) {
   if (!list.length) return [];
   const sorted = Uint32Array.from(list).sort();
@@ -2723,8 +2826,10 @@ function toRanges(list) {
 
 function buildEdits() {
   const map = new Map();
+  const gone = [];
   const src = scene.sourceIndex;
   for (let i = 0; i < pointCount; i++) {
+    if (scene.dead[i]) { gone.push(src ? src[i] : i); continue; }
     if (scene.klass[i] === origKlass[i] && scene.cluster[i] === origCluster[i]) continue;
     const key = scene.klass[i] + ":" + scene.cluster[i];
     let list = map.get(key);
@@ -2748,7 +2853,9 @@ function buildEdits() {
     assignments
   };
   if (Object.keys(classes).length) document_.classes = classes;
-  return { document: document_, changed };
+  if (gone.length) document_.deleted = toRanges(gone);
+  return { document: document_, changed: changed + gone.length,
+           cropped: gone.length };
 }
 
 async function saveFile(name, text) {
@@ -2776,7 +2883,7 @@ async function saveFile(name, text) {
 
 async function exportEdits() {
   if (!scene || !origKlass) return;
-  const { document: doc, changed } = buildEdits();
+  const { document: doc, changed, cropped } = buildEdits();
   if (!changed) { say("Nothing has been reclassified yet."); return; }
   const stem = (scene.header.name || "splatseg").replace(/\.[^.]+$/, "");
   const name = stem + ".edits.json";
@@ -2788,6 +2895,7 @@ async function exportEdits() {
         `${doc.assignments.length} assignment(s)` +
         (made.length ? `, including the class${made.length === 1 ? "" : "es"} ` +
                        `<strong>${made.join(", ")}</strong>` : "") +
+        (cropped ? `, and ${commas(cropped)} cropped away` : "") +
         `. Apply it with ` +
         `<code>splat-tiles relabel &lt;ply&gt; --edits ${name} -o out.ply</code>.`);
   } else {
@@ -2802,9 +2910,13 @@ function refreshSelectionUI() {
   const el = $("selCount");
   el.classList.toggle("none", !selCount);
   el.textContent = selCount ? commas(selCount) + " splats" : "Nothing selected";
-  for (const id of ["newCluster", "mergeCluster", "clearSelBtn"]) {
+  for (const id of ["newCluster", "mergeCluster", "clearSelBtn",
+                    "cropDelete", "cropKeep"]) {
     $(id).disabled = !selCount;
   }
+  $("cropNote").textContent = croppedCount
+    ? commas(croppedCount) + " splats cropped away. Undo puts them back."
+    : "";
   for (const b of $("assign").children) {
     b.disabled = b.id === "newClass" ? CLASSES.length >= MAX_CLASSES : !selCount;
   }
@@ -3116,6 +3228,16 @@ function select(id, frame) {
   invalidate(true);
 }
 
+// The header reads the live count, so a crop shows up there rather than
+// only in the class totals.
+function showPointCount() {
+  const h = scene.header;
+  const live = h.live == null ? h.points : h.live;
+  $("mPoints").textContent = commas(live) +
+    (live < h.points ? ` of ${commas(h.points)}`
+     : (h.sourcePoints > h.points ? ` of ${commas(h.sourcePoints)}` : ""));
+}
+
 function load(next, keepView) {
   const before = { ...cam, target: cam.target.slice() };
   registerClassNames(next.header.classNames);
@@ -3131,9 +3253,7 @@ function load(next, keepView) {
   selected = -1;
   $("inspector").hidden = true;
 
-  $("mPoints").textContent = commas(next.header.points) +
-    (next.header.sourcePoints > next.header.points
-      ? ` of ${commas(next.header.sourcePoints)}` : "");
+  showPointCount();
   $("mClusters").textContent = commas(clusters.length);
   const crs = next.header.crs;
   $("mCrs").textContent = crs && crs.wkid
@@ -3148,6 +3268,11 @@ function load(next, keepView) {
   $("minh").max = String(hi);
   $("empty").hidden = true;
   $("hint").hidden = false;
+  $("runSegment").disabled = false;
+  $("loadedNote").innerHTML =
+    "<strong>" + (next.header.name || next.header.fromTiles || "capture") +
+    "</strong><br>" + commas(next.header.points) + " splats" +
+    (next.header.fromTiles ? " from " + commas(next.header.tiles) + " tiles" : "");
   refreshSelectionUI();
   applyFilters();
   invalidate(true);
@@ -3290,6 +3415,9 @@ window.addEventListener("keydown", e => {
   } else if (!meta && (e.key === "a" || e.key === "s" || e.key === "r")) {
     const op = e.key === "a" ? "add" : e.key === "s" ? "sub" : "replace";
     $("setop").querySelector('[data-op="' + op + '"]').click();
+  } else if (!meta && (e.key === "Delete" || e.key === "Backspace") && selCount) {
+    e.preventDefault();
+    cropSelection(false);
   } else if (!meta && e.key >= "1" && e.key <= "9" && selCount) {
     const c = CLASSES[Number(e.key) - 1];
     if (c) assignClass(c.code);
@@ -3361,6 +3489,9 @@ slider("pCell", "pCellVal", v => fmt(v, 2) + " m", () => {});
 $("frame").addEventListener("click", () => select(selected, true));
 $("clearSel").addEventListener("click", () => select(-1, false));
 $("clearSelBtn").addEventListener("click", clearSelection);
+$("railFile").addEventListener("click", () => $("pick").click());
+$("cropDelete").addEventListener("click", () => cropSelection(false));
+$("cropKeep").addEventListener("click", () => cropSelection(true));
 $("newCluster").addEventListener("click", () => assignCluster("new"));
 $("mergeCluster").addEventListener("click", () => assignCluster("merge"));
 $("exportEdits").addEventListener("click", exportEdits);
@@ -3625,6 +3756,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
 
 $("emptyFile").addEventListener("click", () => $("pick").click());
 $("emptyUrl").addEventListener("click", () => $("openUrl").click());
+$("segBlock").open = true;
 
 // Open on an empty viewport. There used to be a synthetic frame here so the
 // controls had something to act on, but it reads as a capture that failed to
