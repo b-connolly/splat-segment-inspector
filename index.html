@@ -1,0 +1,3639 @@
+<title>Splat Segment Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --viewport: #0d1217;
+  --shell: #f1f3f5;
+  --panel: #ffffff;
+  --raised: #e8ecef;
+  --line: #d3dade;
+  --line-soft: #e4e9ec;
+  --ink: #131a20;
+  --ink-dim: #5b6b78;
+  --ink-faint: #8697a4;
+  --accent: #1c6ea4;
+  --accent-soft: #d6e8f4;
+  --swatch-ground: #6f7c86;
+  --swatch-structure: #4a86b4;
+  --swatch-column: #c26a12;
+  --swatch-none: #8a97a2;
+  --select: #17b26a;
+  --warn: #9a5b00;
+  --shadow: 0 1px 2px rgba(19,26,32,.09), 0 8px 24px rgba(19,26,32,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shell: #0f151b;
+    --panel: #151d24;
+    --raised: #1c262f;
+    --line: #26333d;
+    --line-soft: #1e2831;
+    --ink: #e3eaf0;
+    --ink-dim: #8ea0ae;
+    --ink-faint: #6a7c8a;
+    --accent: #5ea8d9;
+    --accent-soft: #17303f;
+    --swatch-ground: #5d6a75;
+    --swatch-structure: #7fa8c9;
+    --swatch-column: #f2a65a;
+    --swatch-none: #7d8b97;
+    --select: #35d492;
+    --warn: #e0a35c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  --shell: #0f151b;
+  --panel: #151d24;
+  --raised: #1c262f;
+  --line: #26333d;
+  --line-soft: #1e2831;
+  --ink: #e3eaf0;
+  --ink-dim: #8ea0ae;
+  --ink-faint: #6a7c8a;
+  --accent: #5ea8d9;
+  --accent-soft: #17303f;
+  --swatch-ground: #5d6a75;
+  --swatch-structure: #7fa8c9;
+  --swatch-column: #f2a65a;
+  --swatch-none: #7d8b97;
+  --select: #35d492;
+  --warn: #e0a35c;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.3);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--shell);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+.mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---- shell ---------------------------------------------------------- */
+#app {
+  display: grid;
+  grid-template-columns: 344px 1fr;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  gap: 1px;
+  background: var(--line-soft);
+}
+header {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 18px;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.brand .rule {
+  width: 26px; height: 2px; background: var(--swatch-column);
+  align-self: center;
+}
+.meta { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
+.meta div { display: flex; flex-direction: column; gap: 1px; }
+.meta dt, .lbl {
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+}
+.meta dd { margin: 0; font-size: 13px; }
+
+/* ---- rail ------------------------------------------------------------ */
+#rail {
+  background: var(--panel);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.block { padding: 13px 16px; border-bottom: 1px solid var(--line-soft); }
+.block:last-child { border-bottom: 0; }
+.block > .lbl { display: block; margin-bottom: 9px; }
+.block.tight { padding-top: 10px; padding-bottom: 10px; }
+details.block > summary {
+  list-style: none; cursor: pointer;
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  display: flex; align-items: center; gap: 7px;
+}
+details.block > summary::-webkit-details-marker { display: none; }
+details.block > summary::before {
+  content: "\25B8"; font-size: 9px; color: var(--ink-faint);
+  transition: transform .12s;
+}
+details.block[open] > summary::before { transform: rotate(90deg); }
+details.block > summary + * { margin-top: 10px; }
+
+.classes { display: flex; flex-direction: column; gap: 2px; }
+.cls {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0; border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.cls:hover { background: var(--raised); }
+.cls .dot { width: 12px; height: 12px; border-radius: 3px; }
+.cls .n { font-size: 12px; color: var(--ink-dim); }
+.cls[aria-pressed="false"] { opacity: .38; }
+.cls.empty { opacity: .5; cursor: default; }
+.cls.empty .n::after {
+  content: " none"; color: var(--ink-faint); font-size: 11px;
+}
+.cls[aria-pressed="false"] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--ink-faint); }
+
+.seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg button {
+  flex: 1; padding: 6px 4px; border: 0; background: var(--panel);
+  color: var(--ink-dim); font: inherit; font-size: 12px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.seg.small button { font-size: 11px; padding: 5px 3px; }
+
+.row { display: flex; align-items: center; gap: 10px; }
+.row + .row { margin-top: 9px; }
+.row label { font-size: 12px; color: var(--ink-dim); flex: 1; }
+input[type=range] { flex: 1.2; accent-color: var(--accent); }
+.val { font-size: 12px; min-width: 46px; text-align: right; color: var(--ink); }
+.note { margin: 9px 0 0; font-size: 11px; color: var(--ink-faint); }
+.note.warn { color: var(--warn); }
+.note:empty { display: none; }
+
+/* ---- cluster table --------------------------------------------------- */
+#listBlock { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 0; }
+#list { overflow-y: auto; margin: 0 -16px; flex: 1; min-height: 110px; }
+.item {
+  display: grid;
+  grid-template-columns: 8px 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 7px 16px;
+  border: 0; border-left: 3px solid transparent;
+  background: transparent; color: inherit; font: inherit;
+  cursor: pointer; text-align: left;
+}
+.item:hover { background: var(--raised); }
+.item[aria-current="true"] { background: var(--accent-soft); border-left-color: var(--swatch-column); }
+.item .id { font-size: 11px; color: var(--ink-faint); }
+.item .h { font-size: 13px; font-weight: 500; }
+.item .w { font-size: 12px; color: var(--ink-dim); }
+.item .tag { width: 8px; height: 8px; border-radius: 2px; }
+
+/* ---- selection ------------------------------------------------------- */
+#selBlock { background: var(--panel); }
+#selCount {
+  font-size: 20px; font-weight: 600; letter-spacing: -.02em;
+}
+#selCount.none { color: var(--ink-faint); font-weight: 400; font-size: 14px; }
+.assign { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px; }
+.assign button {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 1px solid var(--line); border-radius: 4px;
+  background: var(--raised); color: var(--ink); cursor: pointer;
+  text-align: left;
+}
+.assign button:hover:not(:disabled) { border-color: var(--accent); }
+.assign button:disabled { opacity: .42; cursor: default; }
+.assign .dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.pair { display: flex; gap: 5px; margin-top: 5px; }
+.pair .btn { flex: 1; }
+
+/* ---- viewport -------------------------------------------------------- */
+#stage { position: relative; background: var(--viewport); overflow: hidden; }
+canvas { display: block; touch-action: none; }
+#gl { width: 100%; height: 100%; cursor: crosshair; }
+#overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+#hint {
+  position: absolute; left: 14px; bottom: 12px;
+  font-size: 11px; color: #93a1ad;
+  background: rgba(13,18,23,.74); padding: 5px 9px; border-radius: 4px;
+  pointer-events: none; max-width: 60%;
+}
+#empty {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+}
+#empty[hidden] { display: none; }
+#empty .card {
+  max-width: 400px; text-align: center;
+  color: #9fb0bd;
+}
+#empty h2 {
+  margin: 0 0 6px; font-size: 17px; font-weight: 600; color: #e3eaf0;
+  letter-spacing: -.01em;
+}
+#empty p { margin: 0 0 16px; font-size: 13px; line-height: 1.55; }
+#empty .acts { justify-content: center; margin-bottom: 16px; }
+#empty .acts .btn { flex: none; padding: 7px 14px; }
+#empty .foot { font-size: 11px; color: #6a7c8a; margin: 0; }
+#empty .foot code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  background: rgba(255,255,255,.06); padding: 1px 4px; border-radius: 3px;
+}
+#drop {
+  position: absolute; inset: 0; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(13,18,23,.9); color: #e3eaf0;
+  border: 2px dashed var(--swatch-column); font-size: 15px;
+}
+#drop.on { display: flex; }
+
+#status {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  max-width: min(720px, calc(100% - 32px));
+  display: none; gap: 10px; align-items: flex-start;
+  padding: 9px 14px; border-radius: 5px; font-size: 13px;
+  background: #1c262f; color: #e3eaf0;
+  border-left: 3px solid var(--accent);
+  box-shadow: 0 6px 22px rgba(0,0,0,.35);
+}
+#status.on { display: flex; }
+#status.bad { border-left-color: #d9634f; }
+#status .msg { flex: 1; }
+#status .msg code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+  background: rgba(0,0,0,.28); padding: 1px 5px; border-radius: 3px;
+}
+#status button {
+  border: 0; background: transparent; color: #8ea0ae; cursor: pointer;
+  font: inherit; font-size: 16px; line-height: 1; padding: 0 2px;
+}
+#bar {
+  position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: var(--accent); width: 0; display: none;
+  transition: width .18s linear;
+}
+#bar.on { display: block; }
+
+#inspector {
+  position: absolute; right: 14px; bottom: 12px; width: 268px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: var(--shadow); padding: 13px 15px;
+}
+#inspector[hidden] { display: none; }
+#inspector h2 {
+  margin: 0 0 2px; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+#inspector .sub { font-size: 11px; color: var(--ink-faint); margin-bottom: 11px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12px; }
+.kv dt { color: var(--ink-dim); }
+.kv dd { margin: 0; text-align: right; }
+.acts { display: flex; gap: 7px; margin-top: 12px; }
+.btn {
+  flex: 1; padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 1px solid var(--line); border-radius: 4px;
+  background: var(--raised); color: var(--ink); cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: .42; cursor: default; }
+.btn.wide { flex: none; width: 100%; }
+.btn.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.go:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+button:focus-visible, .item:focus-visible, .cls:focus-visible,
+input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.file {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 11px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--raised);
+  font-size: 12px; white-space: nowrap;
+}
+.file:hover { border-color: var(--accent); }
+.file input { display: none; }
+input[type=text], input[type=url], select {
+  width: 100%; padding: 6px 9px; font: inherit; font-size: 12px;
+  border: 1px solid var(--line); border-radius: 4px;
+  background: var(--shell); color: var(--ink);
+}
+input[type=url] { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+kbd {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px;
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px;
+  padding: 0 3px; color: var(--ink-dim); background: var(--raised);
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="rule"></span>
+      <h1>Splat Segment Inspector</h1>
+    </div>
+    <label class="file">
+      <input type="file" id="pick" multiple>
+      Open file
+    </label>
+    <button class="file" id="openUrl" type="button">Open 3D Tiles URL</button>
+    <div class="meta">
+      <div><span class="lbl">Points</span><dd class="mono num" id="mPoints">&mdash;</dd></div>
+      <div><span class="lbl">Clusters</span><dd class="mono num" id="mClusters">&mdash;</dd></div>
+      <div><span class="lbl">CRS</span><dd class="mono" id="mCrs">&mdash;</dd></div>
+      <div><span class="lbl">Extent</span><dd class="mono num" id="mExtent">&mdash;</dd></div>
+    </div>
+  </header>
+
+  <aside id="rail">
+    <div class="block" id="selBlock">
+      <span class="lbl">Selection</span>
+      <div class="row">
+        <span id="selCount" class="mono num none">Nothing selected</span>
+      </div>
+      <div class="seg small" id="tool" style="margin-top:10px">
+        <button data-tool="pick" aria-pressed="true" title="Click a splat to take its whole cluster">Cluster</button>
+        <button data-tool="box" aria-pressed="false" title="Drag a rectangle">Box</button>
+        <button data-tool="lasso" aria-pressed="false" title="Draw a freehand outline">Lasso</button>
+        <button data-tool="brush" aria-pressed="false" title="Paint splats in a circle">Brush</button>
+      </div>
+      <div class="row" style="margin-top:9px">
+        <span class="lbl" style="flex:1;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-dim)">Combine</span>
+        <div class="seg small" id="setop" style="flex:1.9">
+          <button data-op="replace" aria-pressed="true" title="Each pick starts a new selection  (R)">Replace</button>
+          <button data-op="add" aria-pressed="false" title="Every pick adds to what is already selected  (A)">Add</button>
+          <button data-op="sub" aria-pressed="false" title="Every pick removes from what is already selected  (S)">Subtract</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:9px" id="brushRow" hidden>
+        <label for="brush">Brush radius</label>
+        <input type="range" id="brush" min="8" max="220" step="2" value="46">
+        <span class="val mono num" id="brushVal">46 px</span>
+      </div>
+      <div class="row" style="margin-top:9px" id="reachRow" hidden>
+        <span class="lbl" style="flex:1;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-dim)">Reaches</span>
+        <div class="seg small" id="reach" style="flex:1.6">
+          <button data-reach="volume" aria-pressed="true" title="Every splat inside the outline, however deep">Through</button>
+          <button data-reach="surface" aria-pressed="false" title="Only the splats you can actually see">Visible</button>
+        </div>
+      </div>
+      <p class="note" id="selHint">Drag to select. Hold <kbd>Shift</kbd> to add, <kbd>Alt</kbd> to subtract.</p>
+
+      <span class="lbl" style="display:block;margin:12px 0 6px">Set selected splats to</span>
+      <div class="assign" id="assign"></div>
+      <div class="pair">
+        <button class="btn" id="newCluster" disabled title="Give the selection a cluster id of its own">Split off</button>
+        <button class="btn" id="mergeCluster" disabled title="Give the whole selection one cluster id">Merge</button>
+      </div>
+      <div class="pair">
+        <button class="btn" id="undo" disabled>Undo</button>
+        <button class="btn" id="redo" disabled>Redo</button>
+        <button class="btn" id="clearSelBtn" disabled>Deselect</button>
+      </div>
+      <div class="pair">
+        <button class="btn go wide" id="exportEdits" disabled>Export edits</button>
+      </div>
+      <p class="note" id="editNote"></p>
+    </div>
+
+    <div class="block">
+      <span class="lbl">Classes</span>
+      <div class="classes" id="classes"></div>
+    </div>
+
+    <div class="block">
+      <span class="lbl">Draw as</span>
+      <div class="seg" id="draw">
+        <button data-draw="splats" aria-pressed="true">Gaussians</button>
+        <button data-draw="points" aria-pressed="false">Points</button>
+      </div>
+      <div class="row" style="margin-top:11px" id="spreadRow">
+        <label for="spread">Splat size</label>
+        <input type="range" id="spread" min="0.3" max="2.5" step="0.05" value="1">
+        <span class="val mono num" id="spreadVal">1.00</span>
+      </div>
+      <div class="row" id="psizeRow" hidden>
+        <label for="psize">Point size</label>
+        <input type="range" id="psize" min="0.5" max="6" step="0.1" value="2">
+        <span class="val mono num" id="psizeVal">2.0</span>
+      </div>
+      <div class="row" style="margin-top:11px">
+        <label for="mode">Colour by</label>
+      </div>
+      <div class="seg" id="mode">
+        <button data-mode="0" aria-pressed="false">Class</button>
+        <button data-mode="1" aria-pressed="false">Cluster</button>
+        <button data-mode="2" aria-pressed="true">Capture</button>
+      </div>
+      <div class="row" style="margin-top:11px">
+        <label for="isolate">Dim unselected</label>
+        <input type="range" id="isolate" min="0" max="1" step="0.05" value="0.8">
+        <span class="val mono num" id="isolateVal">0.80</span>
+      </div>
+    </div>
+
+    <details class="block" id="segBlock">
+      <summary>Segment this cloud</summary>
+      <div>
+        <div class="row">
+          <label for="pMinH">Min column height</label>
+          <input type="range" id="pMinH" min="1" max="12" step="0.5" value="2.5">
+          <span class="val mono num" id="pMinHVal">2.5 m</span>
+        </div>
+        <div class="row">
+          <label for="pMaxW">Max column width</label>
+          <input type="range" id="pMaxW" min="0.2" max="4" step="0.1" value="1.5">
+          <span class="val mono num" id="pMaxWVal">1.5 m</span>
+        </div>
+        <div class="row">
+          <label for="pClear">Ground clearance</label>
+          <input type="range" id="pClear" min="0.1" max="3" step="0.1" value="0.6">
+          <span class="val mono num" id="pClearVal">0.6 m</span>
+        </div>
+        <div class="row">
+          <label for="pCell">Plan cell</label>
+          <input type="range" id="pCell" min="0.1" max="1" step="0.05" value="0.3">
+          <span class="val mono num" id="pCellVal">0.30 m</span>
+        </div>
+        <div class="pair" style="margin-top:11px">
+          <button class="btn go wide" id="runSegment">Run segmentation</button>
+        </div>
+        <p class="note" id="segNote">Runs the same rules as
+          <code>splat-tiles segment</code>, here in the browser. It replaces
+          every class and cluster, so export any edits first.</p>
+      </div>
+    </details>
+
+    <div class="block">
+      <span class="lbl">Filter columns</span>
+      <div class="row">
+        <label for="minh">Min height</label>
+        <input type="range" id="minh" min="0" max="20" step="0.5" value="0">
+        <span class="val mono num" id="minhVal">0.0 m</span>
+      </div>
+      <div class="row">
+        <label for="maxw">Max width</label>
+        <input type="range" id="maxw" min="0.2" max="6" step="0.1" value="6">
+        <span class="val mono num" id="maxwVal">6.0 m</span>
+      </div>
+      <p class="note warn" id="hiddenNote"></p>
+    </div>
+
+    <div class="block" id="listBlock">
+      <span class="lbl">Clusters shown <span id="listCount" class="mono num"></span></span>
+      <div id="list"></div>
+      <div style="padding:11px 0 14px">
+        <button class="btn wide" id="copyVisible">Copy listed cluster ids</button>
+      </div>
+    </div>
+  </aside>
+
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="bar"></div>
+    <div id="empty">
+      <div class="card">
+        <h2>Nothing loaded</h2>
+        <p>Open a capture to look at it, segment it, and correct the
+           classes the rules got wrong.</p>
+        <div class="acts">
+          <button class="btn go" type="button" id="emptyFile">Open a file</button>
+          <button class="btn" type="button" id="emptyUrl">Open 3D Tiles URL</button>
+        </div>
+        <p class="foot">A <code>.splatseg</code> bundle, a 3DGS <code>.ply</code>
+           labelled or not, or a hosted <code>tileset.json</code>. Drop a file
+           anywhere on this window and it opens.</p>
+      </div>
+    </div>
+    <div id="hint" hidden>Drag to orbit &middot; Shift-drag or middle-drag to pan &middot; Scroll to zoom &middot; Click a splat to take its cluster</div>
+    <div id="drop">Drop a .splatseg bundle, a .ply, or a .classes.json</div>
+    <div id="status"><span class="msg"></span><button id="statusX" aria-label="Dismiss">&times;</button></div>
+    <div id="inspector" hidden>
+      <h2><span id="insDot" style="width:11px;height:11px;border-radius:3px;display:inline-block"></span><span id="insTitle">Cluster</span></h2>
+      <div class="sub mono" id="insSub"></div>
+      <dl class="kv" id="insKv"></dl>
+      <div class="acts">
+        <button class="btn" id="frame">Frame</button>
+        <button class="btn" id="copyId">Copy id</button>
+        <button class="btn" id="clearSel">Clear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog id="classDlg" style="border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);padding:20px;width:min(420px,92vw);box-shadow:var(--shadow)">
+  <form method="dialog" id="classForm">
+    <h2 style="margin:0 0 4px;font-size:16px;font-weight:600">New class</h2>
+    <p style="margin:0 0 14px;font-size:12px;color:var(--ink-dim)">
+      Name it for what it is &mdash; beam, pipe, formwork, rebar. It gets the
+      next free code in the LAS user range, travels with your edits, and
+      becomes its own layer when you publish.
+    </p>
+    <div class="row">
+      <span class="dot" id="classSwatch" style="width:14px;height:14px;border-radius:3px;flex:none"></span>
+      <input type="text" id="className" maxlength="24" spellcheck="false"
+             placeholder="Beam" style="flex:1">
+      <span class="val mono num" id="classCode"></span>
+    </div>
+    <p class="note" id="classNote"></p>
+    <div class="acts" style="justify-content:flex-end">
+      <button class="btn" type="button" id="classCancel">Cancel</button>
+      <button class="btn go" type="button" id="classGo">Create and assign</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="urlDlg" style="border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);padding:20px;width:min(620px,92vw);box-shadow:var(--shadow)">
+  <form method="dialog" id="urlForm">
+    <h2 style="margin:0 0 4px;font-size:16px;font-weight:600">Open a 3D Tiles splat layer</h2>
+    <p style="margin:0 0 14px;font-size:12px;color:var(--ink-dim)">
+      Paste the <code>tileset.json</code> of a hosted Gaussian splat layer. It is
+      fetched, decoded and merged here in the browser &mdash; nothing is uploaded,
+      and ArcGIS Pro never has to open.
+    </p>
+    <input type="url" id="urlInput" required spellcheck="false"
+           placeholder="https://tiles.arcgis.com/tiles/&hellip;/3DTilesServer/tileset.json">
+    <div id="levelPick" hidden style="margin-top:14px">
+      <span class="lbl" style="display:block;margin-bottom:6px">Level of detail</span>
+      <select id="levelSel"></select>
+      <p class="note" id="levelNote"></p>
+    </div>
+    <div class="acts" style="justify-content:flex-end">
+      <button class="btn" type="button" id="urlCancel">Cancel</button>
+      <button class="btn go" type="button" id="urlProbe">Read tileset</button>
+      <button class="btn go" type="button" id="urlGo" hidden>Download and decode</button>
+    </div>
+    <p class="note" id="urlNote"></p>
+  </form>
+</dialog>
+
+<!-- The depth sort and the region tests both want every splat position, and
+     both would stall a drag if they ran on the main thread. They live here
+     instead; the page keeps only the answers. -->
+<script type="text/worker" id="sortWorkerSrc">
+"use strict";
+
+let pos = null;          // Float32Array(n*3), world
+let klass = null;        // Uint8Array(n), class codes
+let cluster = null;      // Int32Array(n)
+let sel = null;          // Uint8Array(n), the live selection
+let n = 0;
+
+let depth = null, out = null;
+const counts = new Uint32Array(65536);
+
+// Alpha blending is order-dependent, so splats must be drawn far to near. A
+// counting sort over 16-bit depth buckets does 3.3M splats in a few
+// milliseconds, which is what makes a sort per frame -- rather than one every
+// couple of degrees -- affordable.
+function sortByDepth(a, b, c, d) {
+  if (!depth || depth.length < n) { depth = new Float32Array(n); out = new Uint32Array(n); }
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const z = a * pos[i * 3] + b * pos[i * 3 + 1] + c * pos[i * 3 + 2] + d;
+    depth[i] = z;
+    if (z < lo) lo = z;
+    if (z > hi) hi = z;
+  }
+  const scale = hi > lo ? 65535 / (hi - lo) : 0;
+  counts.fill(0);
+  const bucket = new Uint16Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = (depth[i] - lo) * scale | 0;
+    bucket[i] = k;
+    counts[k]++;
+  }
+  // Ascending buckets put the most negative camera z first, and camera z is
+  // negative in front of the eye -- so that is far to near.
+  let running = 0;
+  for (let i = 0; i < 65536; i++) { const c2 = counts[i]; counts[i] = running; running += c2; }
+  const order = new Uint32Array(n);
+  for (let i = 0; i < n; i++) order[counts[bucket[i]]++] = i;
+  return order;
+}
+
+function inPolygon(px, py, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 2; i < poly.length; j = i, i += 2) {
+    const xi = poly[i], yi = poly[i + 1], xj = poly[j], yj = poly[j + 1];
+    if ((yi > py) !== (yj > py) &&
+        px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Every region tool comes down to the same loop: project, reject on a screen
+// bounding box, then ask the shape. Only what is on screen and not filtered
+// out can be picked, so the selection can never contain something the user
+// cannot see.
+function region(msg) {
+  const m = msg.viewProj, W = msg.width, H = msg.height;
+  const visClass = msg.visClass, filter = msg.filter;
+  const poly = msg.poly;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  if (msg.kind === "circle") {
+    x0 = msg.cx - msg.r; x1 = msg.cx + msg.r;
+    y0 = msg.cy - msg.r; y1 = msg.cy + msg.r;
+  } else {
+    for (let i = 0; i < poly.length; i += 2) {
+      if (poly[i] < x0) x0 = poly[i];
+      if (poly[i] > x1) x1 = poly[i];
+      if (poly[i + 1] < y0) y0 = poly[i + 1];
+      if (poly[i + 1] > y1) y1 = poly[i + 1];
+    }
+  }
+  const r2 = msg.kind === "circle" ? msg.r * msg.r : 0;
+  const add = msg.mode !== "sub", sub = msg.mode === "sub";
+  if (msg.mode === "replace") sel.fill(0);
+
+  for (let i = 0; i < n; i++) {
+    if (!visClass[klass[i]]) continue;
+    const cid = cluster[i];
+    if (cid >= 0 && cid < filter.length && !filter[cid]) continue;
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    if (w <= 1e-6) continue;
+    const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+    if (cx < -1 || cx > 1) continue;
+    const cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+    if (cy < -1 || cy > 1) continue;
+    const px = (cx * 0.5 + 0.5) * W;
+    if (px < x0 || px > x1) continue;
+    const py = (0.5 - cy * 0.5) * H;
+    if (py < y0 || py > y1) continue;
+    let hit;
+    if (msg.kind === "circle") {
+      const dx = px - msg.cx, dy = py - msg.cy;
+      hit = dx * dx + dy * dy <= r2;
+    } else if (msg.kind === "box") {
+      hit = true;                       // the bounding box was the test
+    } else {
+      hit = inPolygon(px, py, poly);
+    }
+    if (!hit) continue;
+    sel[i] = sub ? 0 : (add ? 1 : 1);
+  }
+  let count = 0;
+  for (let i = 0; i < n; i++) if (sel[i]) count++;
+  return count;
+}
+
+onmessage = (e) => {
+  const msg = e.data;
+  switch (msg.cmd) {
+    case "scene": {
+      pos = msg.pos; klass = msg.klass; cluster = msg.cluster;
+      n = msg.n;
+      sel = new Uint8Array(n);
+      depth = null; out = null;
+      postMessage({ type: "ready" });
+      break;
+    }
+    case "classes": {
+      klass = msg.klass; cluster = msg.cluster;
+      break;
+    }
+    case "setsel": {
+      sel = msg.sel;
+      break;
+    }
+    case "sort": {
+      if (!pos) break;
+      const order = sortByDepth(msg.a, msg.b, msg.c, msg.d);
+      postMessage({ type: "order", order, token: msg.token }, [order.buffer]);
+      break;
+    }
+    case "region": {
+      if (!pos) break;
+      const count = region(msg);
+      const copy = sel.slice();
+      postMessage({ type: "sel", sel: copy, count, token: msg.token },
+                  [copy.buffer]);
+      break;
+    }
+    case "indices": {
+      // A surface pick hands back splat indices read from the pick buffer.
+      if (!pos) break;
+      if (msg.mode === "replace") sel.fill(0);
+      const list = msg.list, v = msg.mode === "sub" ? 0 : 1;
+      for (let i = 0; i < list.length; i++) sel[list[i]] = v;
+      let count = 0;
+      for (let i = 0; i < n; i++) if (sel[i]) count++;
+      const copy = sel.slice();
+      postMessage({ type: "sel", sel: copy, count, token: msg.token },
+                  [copy.buffer]);
+      break;
+    }
+    case "clear": {
+      if (sel) sel.fill(0);
+      const copy = sel ? sel.slice() : new Uint8Array(0);
+      postMessage({ type: "sel", sel: copy, count: 0, token: msg.token },
+                  [copy.buffer]);
+      break;
+    }
+  }
+};
+</script>
+
+<!-- Everything slow and self-contained: fetching and decoding a hosted 3D
+     Tiles layer, and segmenting the result. Both are ports of the Python
+     package -- splattiles/spz.py, glb.py, tileset.py and segment.py -- kept
+     deliberately close to them so the two stay in step. -->
+<script type="text/worker" id="jobWorkerSrc">
+"use strict";
+
+/* ------------------------------------------------------------ matrices */
+// Row-major 4x4 in a Float64Array(16); glTF hands them over column-major.
+function ident4() {
+  const m = new Float64Array(16);
+  m[0] = m[5] = m[10] = m[15] = 1;
+  return m;
+}
+function fromGltf(a) {
+  const m = new Float64Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) m[r * 4 + c] = a[c * 4 + r];
+  return m;
+}
+function toGltf(m) {
+  const a = new Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) a[c * 4 + r] = m[r * 4 + c];
+  return a;
+}
+function mul4(a, b) {
+  const m = new Float64Array(16);
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      m[r * 4 + c] = a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] +
+                     a[r * 4 + 2] * b[8 + c] + a[r * 4 + 3] * b[12 + c];
+    }
+  }
+  return m;
+}
+// The node matrix producers write is -90 about x, and every 3D Tiles renderer
+// also applies the implicit glTF y-up -> z-up turn of +90. They cancel, so the
+// SPZ payload is natively in the tile's z-up, grid-parallel frame.
+const GLTF_IMPLICIT = fromGltf([1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1]);
+
+// Pull the rotation and the uniform scale out of the linear part, the way
+// GaussianCloud.transformed does: anything with shear or a non-uniform scale
+// would distort the Gaussians, so it is refused rather than fudged.
+function decomposeRigid(m) {
+  const col = (c) => [m[c], m[4 + c], m[8 + c]];
+  const len = (v) => Math.hypot(v[0], v[1], v[2]);
+  const s = [len(col(0)), len(col(1)), len(col(2))];
+  const scale = (s[0] + s[1] + s[2]) / 3;
+  if (scale < 1e-12) throw new Error("degenerate tile transform");
+  for (const v of s) {
+    if (Math.abs(v - scale) > 1e-6 * scale) {
+      throw new Error("tile transform has a non-uniform scale (" +
+                      s.map(x => x.toFixed(6)).join(", ") + ")");
+    }
+  }
+  const R = new Float64Array(9);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) R[r * 3 + c] = m[r * 4 + c] / scale;
+  return { R, scale };
+}
+function mat3ToQuat(m) {          // xyzw, Shepperd's branch-on-trace
+  const t = m[0] + m[4] + m[8];
+  let s, x, y, z, w;
+  if (t > 0) {
+    s = Math.sqrt(t + 1) * 2; w = 0.25 * s;
+    x = (m[7] - m[5]) / s; y = (m[2] - m[6]) / s; z = (m[3] - m[1]) / s;
+  } else if (m[0] > m[4] && m[0] > m[8]) {
+    s = Math.sqrt(1 + m[0] - m[4] - m[8]) * 2; w = (m[7] - m[5]) / s;
+    x = 0.25 * s; y = (m[1] + m[3]) / s; z = (m[2] + m[6]) / s;
+  } else if (m[4] > m[8]) {
+    s = Math.sqrt(1 + m[4] - m[0] - m[8]) * 2; w = (m[2] - m[6]) / s;
+    x = (m[1] + m[3]) / s; y = 0.25 * s; z = (m[5] + m[7]) / s;
+  } else {
+    s = Math.sqrt(1 + m[8] - m[0] - m[4]) * 2; w = (m[3] - m[1]) / s;
+    x = (m[2] + m[6]) / s; y = (m[5] + m[7]) / s; z = 0.25 * s;
+  }
+  const n = Math.hypot(x, y, z, w) || 1;
+  return [x / n, y / n, z / n, w / n];
+}
+function quatMul(a, b) {          // xyzw
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+  ];
+}
+
+/* ------------------------------------------------------------ SPZ v2/v3 */
+const SPZ_MAGIC = 0x5053474E;
+const SQRT1_2 = 0.7071067811865476;
+//: 0.28209479177387814 / 0.15 -- the render constant over SPZ's storage scale.
+const SH_GAIN = 1.8806319451591876;
+// Bit fields of a smallest-three u32, keyed by the omitted (largest)
+// component. Decoding consumes the low 10 bits first and gives it to the
+// highest remaining index, so the table runs 3 -> 0.
+const DECODE_ORDER = [[3, 2, 1], [3, 2, 0], [3, 1, 0], [2, 1, 0]];
+
+async function gunzip(bytes) {
+  if (!(bytes[0] === 0x1f && bytes[1] === 0x8b)) return bytes;   // already raw
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("this browser has no DecompressionStream, so gzipped SPZ " +
+                    "tiles cannot be read here");
+  }
+  const stream = new Blob([bytes]).stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Decodes into the byte-quantised form the viewer stores, except positions
+// (float, so a whole-site frame keeps millimetres) and the quaternion, which
+// still has to be rotated into place.
+function spzDecode(raw) {
+  if (raw.length < 16) throw new Error("truncated SPZ header");
+  const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  const magic = v.getUint32(0, true), version = v.getUint32(4, true);
+  const n = v.getUint32(8, true);
+  const shDegree = raw[12], fracBits = raw[13], flags = raw[14];
+  if (magic !== SPZ_MAGIC) throw new Error("bad SPZ magic 0x" + magic.toString(16));
+  if (version !== 2 && version !== 3) {
+    throw new Error("SPZ version " + version + "; this reader handles v2 and v3");
+  }
+  if (shDegree !== 0) {
+    throw new Error("SPZ shDegree " + shDegree + "; splat 3D Tiles carry degree 0");
+  }
+  const rotBytes = version >= 3 ? 4 : 3;
+  const posOff = 16, alphaOff = posOff + n * 9, colOff = alphaOff + n;
+  const scaleOff = colOff + n * 3, rotOff = scaleOff + n * 3;
+  if (raw.length < rotOff + n * rotBytes) {
+    throw new Error("truncated SPZ: " + raw.length + " bytes for " + n + " points");
+  }
+
+  const posScale = 1 / (1 << fracBits);
+  const position = new Float32Array(n * 3);
+  for (let i = 0; i < n * 3; i++) {
+    const o = posOff + i * 3;
+    let f = raw[o] | (raw[o + 1] << 8) | (raw[o + 2] << 16);
+    if (f & 0x800000) f -= 0x1000000;
+    position[i] = f * posScale;
+  }
+  const alpha = raw.slice(alphaOff, alphaOff + n);
+  // SPZ stores the degree-0 SH coefficient with its own 0.15 scale, but a
+  // renderer shows 0.5 + C0 * sh with C0 = 0.2821. The ratio is a real
+  // contrast gain, not a rounding detail: skip it and the capture comes out
+  // visibly washed out against what the PLY path shows.
+  const colour = new Uint8Array(n * 3);
+  for (let i = 0; i < n * 3; i++) {
+    const v = 127.5 + (raw[colOff + i] - 127.5) * SH_GAIN;
+    colour[i] = v < 0 ? 0 : (v > 255 ? 255 : v);
+  }
+  const scaleB = raw.slice(scaleOff, scaleOff + n * 3);
+
+  const quat = new Float32Array(n * 4);
+  if (version >= 3) {
+    for (let i = 0; i < n; i++) {
+      const c = v.getUint32(rotOff + i * 4, true);
+      const largest = c >>> 30;
+      const target = DECODE_ORDER[largest];
+      let sum = 0;
+      for (let j = 0; j < 3; j++) {
+        const field = (c >>> (10 * j)) & 0x3ff;
+        let mag = (field & 0x1ff) / 511 * SQRT1_2;
+        if ((field >>> 9) & 1) mag = -mag;
+        quat[i * 4 + target[j]] = mag;
+        sum += mag * mag;
+      }
+      quat[i * 4 + largest] = Math.sqrt(Math.max(0, 1 - sum));
+    }
+  } else {
+    // v2 stores x, y, z as bytes and recovers w from the unit norm, which
+    // costs the sign of w -- harmless, since q and -q are one rotation.
+    for (let i = 0; i < n; i++) {
+      let sum = 0;
+      for (let k = 0; k < 3; k++) {
+        const c = raw[rotOff + i * 3 + k] / 127.5 - 1;
+        quat[i * 4 + k] = c; sum += c * c;
+      }
+      quat[i * 4 + 3] = Math.sqrt(Math.max(0, 1 - sum));
+    }
+  }
+  return { n, position, colour, alpha, scaleB, quat,
+           fractionalBits: fracBits, antialiased: !!(flags & 1) };
+}
+
+/* ----------------------------------------------------------------- glb */
+const GS_EXT = "KHR_gaussian_splatting";
+const SPZ_EXT = "KHR_gaussian_splatting_compression_spz_2";
+
+async function glbRead(buffer) {
+  const v = new DataView(buffer);
+  if (buffer.byteLength < 20 || v.getUint32(0, true) !== 0x46546c67) {
+    throw new Error("not a glb");
+  }
+  const jsonLen = v.getUint32(12, true);
+  if (v.getUint32(16, true) !== 0x4e4f534a) throw new Error("first glb chunk is not JSON");
+  const gltf = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 20, jsonLen)));
+  const binLen = v.getUint32(20 + jsonLen, true);
+  if (v.getUint32(24 + jsonLen, true) !== 0x004e4942) throw new Error("second glb chunk is not BIN");
+  const binStart = 28 + jsonLen;
+
+  let bvIndex = -1;
+  for (const mesh of gltf.meshes || []) {
+    for (const prim of mesh.primitives || []) {
+      const gs = (prim.extensions || {})[GS_EXT] || {};
+      const ext = (gs.extensions || {})[SPZ_EXT];
+      if (ext && ext.bufferView !== undefined) { bvIndex = ext.bufferView; break; }
+    }
+    if (bvIndex >= 0) break;
+  }
+  if (bvIndex < 0) throw new Error("no " + SPZ_EXT + " payload; not an SPZ splat tile");
+  const bv = (gltf.bufferViews || [])[bvIndex];
+  if (!bv) throw new Error("SPZ bufferView " + bvIndex + " out of range");
+  const off = binStart + (bv.byteOffset || 0);
+  const payload = new Uint8Array(buffer, off, bv.byteLength || (binLen - (bv.byteOffset || 0)));
+
+  let nodeMatrix = fromGltf([1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]);   // -90 about x
+  const node = (gltf.nodes || [])[0];
+  if (node && Array.isArray(node.matrix) && node.matrix.length === 16) {
+    nodeMatrix = fromGltf(node.matrix);
+  }
+  const tile = spzDecode(await gunzip(payload));
+  tile.payloadToLocal = mul4(GLTF_IMPLICIT, nodeMatrix);
+  return tile;
+}
+
+/* ------------------------------------------------------------- tileset */
+function joinUrl(base, rel) { return new URL(rel, base).href; }
+
+async function fetchJson(url) {
+  const r = await fetch(url, { mode: "cors" });
+  if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
+  return r.json();
+}
+
+function contentUris(node) {
+  const out = [];
+  if (node.content && (node.content.uri || node.content.url)) {
+    out.push(node.content.uri || node.content.url);
+  }
+  for (const e of node.contents || []) if (e.uri || e.url) out.push(e.uri || e.url);
+  return out;
+}
+
+// Reads the whole tree -- following external tilesets breadth-first -- without
+// downloading a single splat, so a level can be chosen before committing to
+// the bytes.
+async function readTree(rootUrl, report) {
+  const rootDoc = await fetchJson(rootUrl);
+  const tiles = [], anchors = [];
+  const seen = new Set([rootUrl]);
+  let pending = [{ doc: rootDoc, url: rootUrl, ecef: ident4(), crs: ident4(),
+                   crsSeen: false, refine: "REPLACE", depth: 0 }];
+  let docs = 1;
+
+  while (pending.length) {
+    const externals = [];
+    for (const item of pending) {
+      const walk = (node, ecef, crs, crsSeen, refine, depth) => {
+        if (node.implicitTiling) {
+          throw new Error("this tileset uses implicit tiling, which this " +
+                          "reader does not handle");
+        }
+        if (Array.isArray(node.transform) && node.transform.length === 16) {
+          ecef = mul4(ecef, fromGltf(node.transform));
+        }
+        const ext = (node.extensions || {}).ESRI_crs || {};
+        if (Array.isArray(ext.transform) && ext.transform.length === 16) {
+          crs = mul4(crs, fromGltf(ext.transform));
+          crsSeen = true;
+          anchors.push({ depth, ecef, crs });
+        }
+        refine = String(node.refine || refine).toUpperCase();
+        const children = node.children || [];
+        const uris = contentUris(node);
+        const hasJson = uris.some(u => u.toLowerCase().split("?")[0].endsWith(".json"));
+        const terminal = children.length === 0 && !hasJson;
+        for (const uri of uris) {
+          const target = joinUrl(item.url, uri);
+          const clean = target.toLowerCase().split("?")[0];
+          if (clean.endsWith(".json")) {
+            if (seen.has(target)) continue;
+            seen.add(target);
+            externals.push({ url: target, ecef, crs, crsSeen,
+                             refine, depth: depth + 1 });
+          } else if (clean.endsWith(".glb")) {
+            tiles.push({ url: target, depth, ecef, crs, crsSeen, terminal,
+                         error: node.geometricError });
+          } else {
+            throw new Error("unsupported tile content " + uri);
+          }
+        }
+        for (const child of children) {
+          walk(child, ecef, crs, crsSeen, refine, depth + 1);
+        }
+      };
+      // A tileset document wraps its tree in "root"; a document without one
+      // has nothing to walk.
+      const node = item.doc.root;
+      if (node) walk(node, item.ecef, item.crs, item.crsSeen, item.refine, item.depth);
+    }
+    if (!externals.length) break;
+    report({ stage: "reading the tile tree", done: docs, total: docs + externals.length });
+    const fetched = await pool(externals, 12, async (e, i) => {
+      const doc = await fetchJson(e.url);
+      report({ stage: "reading the tile tree", done: docs + i + 1,
+               total: docs + externals.length });
+      return { ...e, doc };
+    });
+    docs += externals.length;
+    pending = fetched;
+  }
+  if (!tiles.length) throw new Error("no splat tiles found in this tileset");
+
+  // The layer origin the publisher chose: the shallowest node with a real
+  // projected translation. Its ECEF matrix is the layer's own placement rather
+  // than one leaf's slightly perturbed copy.
+  const placed = anchors.filter(a => a.crs[3] || a.crs[7] || a.crs[11]);
+  const pickFrom = placed.length ? placed : (anchors.length ? anchors : tiles);
+  const anchor = pickFrom.reduce((m, a) => (a.depth < m.depth ? a : m), pickFrom[0]);
+  return { rootUrl, rootDoc, tiles, anchor, hasCrs: placed.length > 0 };
+}
+
+function levelsOf(tree) {
+  const max = tree.tiles.reduce((m, t) => Math.max(m, t.depth), 0);
+  const out = [];
+  for (let L = 0; L <= max; L++) {
+    const cut = tree.tiles.filter(t => (t.terminal && t.depth <= L) ||
+                                       (!t.terminal && t.depth === L));
+    if (cut.length) out.push({ level: L, tiles: cut.length, finest: L === max });
+  }
+  return out;
+}
+
+async function pool(items, limit, run) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await run(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function fetchTiles(tree, level, report) {
+  const cut = tree.tiles.filter(t => (t.terminal && t.depth <= level) ||
+                                     (!t.terminal && t.depth === level));
+  const ax = tree.anchor.crs[3], ay = tree.anchor.crs[7], az = tree.anchor.crs[11];
+  const ex = tree.anchor.ecef[3], ey = tree.anchor.ecef[7], ez = tree.anchor.ecef[11];
+
+  let done = 0;
+  const decoded = await pool(cut, 8, async (tile) => {
+    const r = await fetch(tile.url, { mode: "cors" });
+    if (!r.ok) throw new Error("HTTP " + r.status + " for " + tile.url);
+    const t = await glbRead(await r.arrayBuffer());
+    // payload -> projected CRS -> a local frame anchored at the layer origin.
+    // Only the translation is removed, never the rotation, so the local axes
+    // stay parallel to the projected grid and projected = local + anchor
+    // holds exactly.
+    const base = tree.hasCrs ? tile.crs : tile.ecef;
+    const to = mul4(base, t.payloadToLocal);
+    to[3] -= tree.hasCrs ? ax : ex;
+    to[7] -= tree.hasCrs ? ay : ey;
+    to[11] -= tree.hasCrs ? az : ez;
+    t.to = to;
+    done++;
+    if (!(done & 7) || done === cut.length) {
+      report({ stage: "downloading tiles", done, total: cut.length });
+    }
+    return t;
+  });
+
+  const total = decoded.reduce((s, t) => s + t.n, 0);
+  const position = new Float32Array(total * 3);
+  const colour = new Uint8Array(total * 3);
+  const opacity = new Uint8Array(total);
+  const scale = new Uint8Array(total * 3);
+  const rot = new Uint8Array(total * 4);
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  let at = 0, fracBits = 12;
+
+  for (const t of decoded) {
+    if (at === 0) fracBits = t.fractionalBits;
+    const m = t.to;
+    const { R, scale: s } = decomposeRigid(m);
+    const qr = mat3ToQuat(R);
+    const logS = s !== 1 ? Math.log(s) : 0;
+    for (let i = 0; i < t.n; i++) {
+      const x = t.position[i * 3], y = t.position[i * 3 + 1], z = t.position[i * 3 + 2];
+      const wx = m[0] * x + m[1] * y + m[2] * z + m[3];
+      const wy = m[4] * x + m[5] * y + m[6] * z + m[7];
+      const wz = m[8] * x + m[9] * y + m[10] * z + m[11];
+      const j = at + i;
+      position[j * 3] = wx; position[j * 3 + 1] = wy; position[j * 3 + 2] = wz;
+      if (wx < lo[0]) lo[0] = wx; if (wx > hi[0]) hi[0] = wx;
+      if (wy < lo[1]) lo[1] = wy; if (wy > hi[1]) hi[1] = wy;
+      if (wz < lo[2]) lo[2] = wz; if (wz > hi[2]) hi[2] = wz;
+      colour[j * 3] = t.colour[i * 3];
+      colour[j * 3 + 1] = t.colour[i * 3 + 1];
+      colour[j * 3 + 2] = t.colour[i * 3 + 2];
+      opacity[j] = t.alpha[i];
+      for (let k = 0; k < 3; k++) {
+        // Scale bytes are (log sigma + 10) * 16, so a uniform scale in the
+        // matrix is 16 * log(s) added to the byte.
+        const b = logS ? t.scaleB[i * 3 + k] + logS * 16 : t.scaleB[i * 3 + k];
+        scale[j * 3 + k] = b < 0 ? 0 : (b > 255 ? 255 : Math.round(b));
+      }
+      const q = quatMul(qr, [t.quat[i * 4], t.quat[i * 4 + 1],
+                             t.quat[i * 4 + 2], t.quat[i * 4 + 3]]);
+      const n4 = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+      for (let k = 0; k < 4; k++) {
+        const b = Math.round((q[k] / n4) * 127.5 + 127.5);
+        rot[j * 4 + k] = b < 0 ? 0 : (b > 255 ? 255 : b);
+      }
+    }
+    at += t.n;
+  }
+
+  const crsExt = ((tree.rootDoc.extensions || {}).ESRI_crs) || {};
+  return {
+    header: {
+      points: total, sourcePoints: total, bbox: { lo, hi },
+      clusters: [], classCounts: { unclassified: total },
+      complete: true,
+      crs: tree.hasCrs ? { wkid: crsExt.wkid, vcsWkid: crsExt.vcsWkid,
+                           anchor: [ax, ay, az] } : null,
+      georef: tree.hasCrs ? {
+        wkid: crsExt.wkid || null, vcsWkid: crsExt.vcsWkid || null,
+        anchorProjected: [ax, ay, az], ecefTransform: toGltf(tree.anchor.ecef),
+        geometricErrorRoot: tree.rootDoc.geometricError || 24,
+        geometricErrorChild: Math.min(...tree.tiles
+          .filter(t => t.error != null).map(t => t.error).concat([0.5])),
+        upAxis: "z", spz: { fractionalBits: fracBits, antialiased: true },
+        source: { tileset: tree.rootUrl, tiles: decoded.length, splats: total }
+      } : null,
+      fromTiles: tree.rootUrl, level, tiles: decoded.length
+    },
+    position, colour, opacity, scale, rot,
+    klass: new Uint8Array(total), cluster: new Int32Array(total).fill(-1),
+    sourceIndex: null
+  };
+}
+
+/* ---------------------------------------------------------- segmenting */
+// A port of splattiles/segment.py. Splats carry more shape than points do --
+// each is an oriented ellipsoid, so its own covariance already gives a normal
+// and says whether it is disc-like. No neighbourhood search is needed; only
+// the grouping step looks at where splats sit relative to one another.
+const UNCLASSIFIED = 0, GROUND = 2, STRUCTURE = 6, COLUMN = 64;
+
+function groundHeight(position, n, cell, quantile, minCellPoints, report) {
+  // Cells sit on the grid of multiples of `cell`, not on the cloud's own
+  // minimum, so the same site always falls into the same cells however it is
+  // subset -- and so this agrees with the Python side splat for splat.
+  let kx0 = Infinity, ky0 = Infinity, kx1 = -Infinity, ky1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const cx = Math.floor(position[i * 3] / cell);
+    const cy = Math.floor(position[i * 3 + 1] / cell);
+    if (cx < kx0) kx0 = cx; if (cx > kx1) kx1 = cx;
+    if (cy < ky0) ky0 = cy; if (cy > ky1) ky1 = cy;
+  }
+  const nx = kx1 - kx0 + 1, ny = ky1 - ky0 + 1;
+  const cells = nx * ny;
+  const key = new Int32Array(n);
+  const count = new Int32Array(cells);
+  for (let i = 0; i < n; i++) {
+    const k = (Math.floor(position[i * 3] / cell) - kx0) * ny +
+              (Math.floor(position[i * 3 + 1] / cell) - ky0);
+    key[i] = k; count[k]++;
+  }
+  // Bucket the heights so a low quantile can be taken per cell -- a flat
+  // threshold only works on a flat site.
+  const start = new Int32Array(cells + 1);
+  for (let c = 0; c < cells; c++) start[c + 1] = start[c] + count[c];
+  const fill = start.slice(0, cells);
+  const z = new Float32Array(n);
+  for (let i = 0; i < n; i++) z[fill[key[i]]++] = position[i * 3 + 2];
+
+  const grid = new Float32Array(cells).fill(NaN);
+  const scratch = [];
+  for (let c = 0; c < cells; c++) {
+    const a = start[c], b = start[c + 1];
+    if (b - a < minCellPoints) continue;
+    scratch.length = 0;
+    for (let i = a; i < b; i++) scratch.push(z[i]);
+    scratch.sort((p, q) => p - q);
+    const at = (quantile / 100) * (scratch.length - 1);
+    const f = Math.floor(at), g = at - f;
+    grid[c] = scratch[f] * (1 - g) + scratch[Math.min(f + 1, scratch.length - 1)] * g;
+  }
+
+  let anyKnown = false;
+  for (let c = 0; c < cells; c++) if (!Number.isNaN(grid[c])) { anyKnown = true; break; }
+  if (!anyKnown) {
+    const all = Array.from(z).sort((p, q) => p - q);
+    const at = (quantile / 100) * (all.length - 1);
+    const f = Math.floor(at), g = at - f;
+    grid.fill(all[f] * (1 - g) + all[Math.min(f + 1, all.length - 1)] * g);
+  } else {
+    // Grow the known ground outwards into the gaps a ring at a time. Filling
+    // sparse cells from a site-wide value instead can be metres out on a
+    // slope, and that reads as structure.
+    for (let pass = 0; pass < Math.max(nx, ny) + 1; pass++) {
+      let holes = 0;
+      const next = grid.slice();
+      for (let cx = 0; cx < nx; cx++) {
+        for (let cy = 0; cy < ny; cy++) {
+          const c = cx * ny + cy;
+          if (!Number.isNaN(grid[c])) continue;
+          holes++;
+          let sum = 0, k = 0;
+          if (cx > 0 && !Number.isNaN(grid[c - ny])) { sum += grid[c - ny]; k++; }
+          if (cx < nx - 1 && !Number.isNaN(grid[c + ny])) { sum += grid[c + ny]; k++; }
+          if (cy > 0 && !Number.isNaN(grid[c - 1])) { sum += grid[c - 1]; k++; }
+          if (cy < ny - 1 && !Number.isNaN(grid[c + 1])) { sum += grid[c + 1]; k++; }
+          if (k) next[c] = sum / k;
+        }
+      }
+      grid.set(next);
+      if (!holes) break;
+    }
+    let fallback = 0, seen = 0;
+    for (let c = 0; c < cells; c++) if (!Number.isNaN(grid[c])) { fallback += grid[c]; seen++; }
+    fallback = seen ? fallback / seen : 0;
+    for (let c = 0; c < cells; c++) if (Number.isNaN(grid[c])) grid[c] = fallback;
+  }
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = grid[key[i]];
+  return out;
+}
+
+// A column in a building frame touches the slabs and beams around it, so
+// connected components in 3D swallow it into the structure -- on a real
+// capture the largest "cluster" came out as a 50 m facade. Seen from above a
+// column is a small compact footprint that happens to be tall, and a wall is a
+// long one, so the grouping happens in plan.
+function planComponents(px, index, cell, minHeight, minCellSplats) {
+  const m = index.length;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let j = 0; j < m; j++) {
+    const i = index[j], x = px[i * 3], y = px[i * 3 + 1];
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const nx = Math.floor((x1 - x0) / cell) + 1, ny = Math.floor((y1 - y0) / cell) + 1;
+  const cells = nx * ny;
+  const key = new Int32Array(m);
+  const zlo = new Float32Array(cells).fill(Infinity);
+  const zhi = new Float32Array(cells).fill(-Infinity);
+  const count = new Int32Array(cells);
+  for (let j = 0; j < m; j++) {
+    const i = index[j];
+    const k = Math.floor((px[i * 3] - x0) / cell) * ny +
+              Math.floor((px[i * 3 + 1] - y0) / cell);
+    key[j] = k;
+    const z = px[i * 3 + 2];
+    if (z < zlo[k]) zlo[k] = z;
+    if (z > zhi[k]) zhi[k] = z;
+    count[k]++;
+  }
+  const tall = new Uint8Array(cells);
+  let tallCells = 0;
+  for (let k = 0; k < cells; k++) {
+    if (count[k] >= minCellSplats && zhi[k] - zlo[k] >= minHeight) { tall[k] = 1; tallCells++; }
+  }
+  // Eight-connected flood fill over the tall cells, iterative so a long wall
+  // cannot blow the stack.
+  const label = new Int32Array(cells).fill(-1);
+  const stack = new Int32Array(cells);
+  let groups = 0;
+  for (let k = 0; k < cells; k++) {
+    if (!tall[k] || label[k] >= 0) continue;
+    let top = 0;
+    stack[top++] = k; label[k] = groups;
+    while (top) {
+      const c = stack[--top];
+      const cx = (c / ny) | 0, cy = c % ny;
+      for (let dx = -1; dx <= 1; dx++) {
+        const ax = cx + dx;
+        if (ax < 0 || ax >= nx) continue;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ay = cy + dy;
+          if (ay < 0 || ay >= ny) continue;
+          const d = ax * ny + ay;
+          if (tall[d] && label[d] < 0) { label[d] = groups; stack[top++] = d; }
+        }
+      }
+    }
+    groups++;
+  }
+  const labels = new Int32Array(m);
+  for (let j = 0; j < m; j++) labels[j] = label[key[j]];
+  return { labels, cells: tallCells, groups };
+}
+
+function segment(scene, opts, report) {
+  const n = scene.header.points;
+  const pos = scene.position, sb = scene.scale, rb = scene.rot;
+  const classification = new Uint8Array(n);
+  const clusterId = new Int32Array(n).fill(-1);
+  if (!n) return { classification, clusterId, clusters: [], notes: {} };
+
+  report({ stage: "following the ground", done: 1, total: 4 });
+  const ground = groundHeight(pos, n, opts.groundCell, opts.groundQuantile, 8);
+
+  report({ stage: "reading splat shapes", done: 2, total: 4 });
+  const candidates = [];
+  let groundCount = 0;
+  for (let i = 0; i < n; i++) {
+    if (pos[i * 3 + 2] - ground[i] <= opts.minClearance) {
+      classification[i] = GROUND; groundCount++; continue;
+    }
+    // The shortest principal axis of the ellipsoid is the surface normal, and
+    // planarity separates a face from a blob. Both come from the splat itself.
+    // Axes ascending by scale byte, which orders sigma too since the byte is
+    // monotone in it.
+    const v0 = sb[i * 3], v1 = sb[i * 3 + 1], v2 = sb[i * 3 + 2];
+    let a, b, c;
+    if (v0 <= v1) {
+      if (v1 <= v2) { a = 0; b = 1; c = 2; }
+      else if (v0 <= v2) { a = 0; b = 2; c = 1; }
+      else { a = 2; b = 0; c = 1; }
+    } else {
+      if (v0 <= v2) { a = 1; b = 0; c = 2; }
+      else if (v1 <= v2) { a = 1; b = 2; c = 0; }
+      else { a = 2; b = 1; c = 0; }
+    }
+    const e = (k) => Math.exp(sb[i * 3 + k] / 16 - 10);
+    const planarity = (e(b) - e(a)) / Math.max(e(c), 1e-12);
+    if (planarity < opts.minPlanarity) continue;
+
+    // The shortest principal axis is the surface normal, and that is column
+    // `a` of the rotation matrix. Only its z matters: 1 is a floor, 0 a wall.
+    let qx = rb[i * 4] / 127.5 - 1, qy = rb[i * 4 + 1] / 127.5 - 1;
+    let qz = rb[i * 4 + 2] / 127.5 - 1, qw = rb[i * 4 + 3] / 127.5 - 1;
+    const qn = Math.hypot(qx, qy, qz, qw) || 1;
+    qx /= qn; qy /= qn; qz /= qn; qw /= qn;
+    const nz = a === 0 ? 2 * (qx * qz - qy * qw)
+             : a === 1 ? 2 * (qy * qz + qx * qw)
+             : 1 - 2 * (qx * qx + qy * qy);
+    if (Math.abs(nz) >= opts.maxNormalZ) continue;
+    candidates.push(i);
+  }
+  const index = Int32Array.from(candidates);
+  if (!index.length) {
+    return { classification, clusterId, clusters: [],
+             notes: { reason: "no vertical surfaces above ground",
+                      ground: groundCount } };
+  }
+
+  report({ stage: "grouping in plan", done: 3, total: 4 });
+  const plan = planComponents(pos, index, opts.planCell, opts.minHeight, 3);
+
+  report({ stage: "measuring groups", done: 4, total: 4 });
+  const stats = new Map();
+  for (let j = 0; j < index.length; j++) {
+    const g = plan.labels[j];
+    if (g < 0) continue;
+    let e = stats.get(g);
+    if (!e) {
+      e = { id: g, count: 0, lo: [Infinity, Infinity, Infinity],
+            hi: [-Infinity, -Infinity, -Infinity], sum: [0, 0, 0] };
+      stats.set(g, e);
+    }
+    const i = index[j];
+    e.count++;
+    for (let k = 0; k < 3; k++) {
+      const v = pos[i * 3 + k];
+      if (v < e.lo[k]) e.lo[k] = v;
+      if (v > e.hi[k]) e.hi[k] = v;
+      e.sum[k] += v;
+    }
+  }
+  // A group earns "column" by being tall and narrow in both horizontal
+  // directions; anything else on a vertical face is structure. Nothing is
+  // painted structure just for being above the ground -- that would make the
+  // class a catch-all and leave nothing unclassified, hiding how much of the
+  // capture the rules never resolved.
+  const isColumn = new Uint8Array(plan.groups);
+  const clusters = [];
+  let columns = 0;
+  for (const e of stats.values()) {
+    const height = e.hi[2] - e.lo[2];
+    const width = Math.max(e.hi[0] - e.lo[0], e.hi[1] - e.lo[1]);
+    const column = width <= opts.maxWidth && height >= opts.minHeight &&
+                   e.count >= opts.minSplats;
+    if (column) { isColumn[e.id] = 1; columns++; }
+    clusters.push({
+      id: e.id, class: column ? COLUMN : STRUCTURE,
+      className: column ? "column" : "structure",
+      count: e.count, lo: e.lo, hi: e.hi,
+      centroid: e.sum.map(v => v / e.count),
+      height, width
+    });
+  }
+  for (let j = 0; j < index.length; j++) {
+    const g = plan.labels[j];
+    if (g < 0) continue;
+    const i = index[j];
+    classification[i] = isColumn[g] ? COLUMN : STRUCTURE;
+    clusterId[i] = g;
+  }
+  clusters.sort((a, b) => a.id - b.id);
+  return { classification, clusterId, clusters,
+           notes: { candidates: index.length, planCells: plan.cells,
+                    groups: plan.groups, columns } };
+}
+
+/* -------------------------------------------------------------- router */
+let tree = null;
+
+onmessage = async (e) => {
+  const msg = e.data;
+  const report = (p) => postMessage({ type: "progress", ...p, token: msg.token });
+  try {
+    if (msg.cmd === "probe") {
+      tree = await readTree(msg.url, report);
+      postMessage({ type: "tree", token: msg.token, levels: levelsOf(tree),
+                    tiles: tree.tiles.length, hasCrs: tree.hasCrs,
+                    wkid: ((tree.rootDoc.extensions || {}).ESRI_crs || {}).wkid || null });
+    } else if (msg.cmd === "fetch") {
+      if (!tree) throw new Error("read the tileset first");
+      const scene = await fetchTiles(tree, msg.level, report);
+      postMessage({ type: "scene", token: msg.token, scene }, [
+        scene.position.buffer, scene.colour.buffer, scene.opacity.buffer,
+        scene.scale.buffer, scene.rot.buffer, scene.klass.buffer,
+        scene.cluster.buffer]);
+    } else if (msg.cmd === "segment") {
+      const r = segment(msg.scene, msg.opts, report);
+      postMessage({ type: "segmented", token: msg.token, ...r },
+                  [r.classification.buffer, r.clusterId.buffer]);
+    }
+  } catch (err) {
+    postMessage({ type: "failed", token: msg.token, message: String(err && err.message || err) });
+  }
+};
+</script>
+
+<script>
+"use strict";
+
+/* -------------------------------------------------------------- status */
+// alert() is blocked inside a sandboxed frame, so anything that goes wrong
+// has to be said on the page itself or it is said nowhere.
+const $ = id => document.getElementById(id);
+function say(message, bad) {
+  const el = $("status");
+  el.querySelector(".msg").innerHTML = message;
+  el.classList.toggle("bad", !!bad);
+  el.classList.add("on");
+}
+function hush() { $("status").classList.remove("on"); }
+function progress(done, total) {
+  const bar = $("bar");
+  if (done == null) { bar.classList.remove("on"); bar.style.width = "0"; return; }
+  bar.classList.add("on");
+  bar.style.width = (100 * done / Math.max(total, 1)).toFixed(1) + "%";
+}
+window.addEventListener("error", e => say("Error: " + e.message, true));
+window.addEventListener("unhandledrejection", e =>
+  say("Error: " + ((e.reason && e.reason.message) || e.reason), true));
+
+const fmt = (v, d = 2) => Number(v).toFixed(d);
+const commas = v => Number(v).toLocaleString();
+
+/* ---------------------------------------------------------------- math */
+function mat4() { return new Float32Array(16); }
+function perspective(o, fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2);
+  o.fill(0);
+  o[0] = f / aspect; o[5] = f; o[11] = -1;
+  o[10] = (far + near) / (near - far);
+  o[14] = (2 * far * near) / (near - far);
+  return o;
+}
+function lookAt(o, eye, center, up) {
+  let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
+  let zl = Math.hypot(zx, zy, zz) || 1; zx /= zl; zy /= zl; zz /= zl;
+  let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+  let xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0;
+  o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0;
+  o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+  o[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+  o[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+  o[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+  o[15] = 1;
+  return o;
+}
+function multiply(o, a, b) {
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 4; r++) {
+      o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] +
+                     a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+  }
+  return o;
+}
+
+/* ------------------------------------------------------- class palette */
+// Class codes follow the toolbox: 0 unclassified, 2 ground, 6 structure,
+// 64 column. Anything else is a class someone made here, or one a relabelled
+// PLY came back carrying; 64 is where LAS opens its user-definable range, so
+// new ones are handed 65 upwards. The index is the compact form the GPU sees,
+// which is why the table is capped -- it is a fixed-size uniform array.
+const MAX_CLASSES = 16;
+const BUILTIN_CLASSES = [
+  { code: 0,  name: "Unclassified", token: "--swatch-none" },
+  { code: 2,  name: "Ground",       token: "--swatch-ground" },
+  { code: 6,  name: "Structure",    token: "--swatch-structure" },
+  { code: 64, name: "Column",       token: "--swatch-column" }
+];
+let CLASSES = BUILTIN_CLASSES.map(c => ({ ...c }));
+const CODE_TO_INDEX = new Uint8Array(256);
+const classOn = [1, 1, 1, 1];
+
+function reindexClasses() {
+  CODE_TO_INDEX.fill(0);
+  CLASSES.forEach((c, i) => { c.index = i; CODE_TO_INDEX[c.code] = i; });
+}
+reindexClasses();
+
+// CODE_TO_INDEX is zero-filled, so an unregistered code would silently read
+// as unclassified. Check the round trip rather than trusting the lookup.
+function classOf(code) {
+  const c = CLASSES[CODE_TO_INDEX[code & 255]];
+  return c && c.code === code ? c : CLASSES[0];
+}
+function knownClass(code) {
+  const c = CLASSES[CODE_TO_INDEX[code & 255]];
+  return !!(c && c.code === code);
+}
+
+// Hues for classes people add, spaced by hand rather than by the golden
+// ratio: a generated sequence keeps landing on the orange the columns already
+// use and the blue that structure uses, which is exactly the confusion a new
+// class is there to avoid. Past the list it falls back to the sequence.
+const CUSTOM_HUES = [0.46, 0.86, 0.31, 0.70, 0.14, 0.97,
+                     0.39, 0.79, 0.22, 0.53, 0.91, 0.27];
+function customColour(seat) {
+  const h = seat < CUSTOM_HUES.length ? CUSTOM_HUES[seat]
+                                      : (0.46 + seat * 0.61803398875) % 1;
+  const [r, g, b] = hslToRgb(h, 0.62, 0.56);
+  return "#" + [r, g, b].map(v =>
+    Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+}
+function hslToRgb(h, s, l) {
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    return l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return [f(0), f(8), f(4)];
+}
+
+function nextClassCode() {
+  let code = 65;
+  while (code < 256 && knownClass(code)) code++;
+  return code;
+}
+
+// Register a class the table does not have yet. Returns it either way, so a
+// caller can just ask for the code it is about to write.
+function ensureClass(code, name) {
+  code = code & 255;
+  if (knownClass(code)) {
+    const existing = classOf(code);
+    if (name && !existing.named) { existing.name = name; existing.named = true; }
+    return existing;
+  }
+  if (CLASSES.length >= MAX_CLASSES) return null;
+  const seat = CLASSES.filter(c => !c.token).length;
+  const entry = { code, name: name || ("Class " + code), index: CLASSES.length,
+                  colour: customColour(seat), named: !!name };
+  CLASSES.push(entry);
+  reindexClasses();
+  classOn.length = CLASSES.length;
+  for (let i = 0; i < classOn.length; i++) if (classOn[i] == null) classOn[i] = 1;
+  return entry;
+}
+
+// A bundle header, or a dropped sidecar, naming codes this table does not
+// know: {"65": "beam"}.
+function registerClassNames(table) {
+  for (const [code, name] of Object.entries(table || {})) {
+    const n = Number(code);
+    if (Number.isFinite(n)) ensureClass(n, String(name));
+  }
+}
+
+function classCss(c) { return c.token ? "var(" + c.token + ")" : c.colour; }
+function classRgb(c) {
+  return c.token ? readToken(c.token) : hexToRgb(c.colour);
+}
+function hexToRgb(hex) {
+  const v = parseInt(String(hex).replace("#", ""), 16);
+  return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255];
+}
+
+function readToken(name) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const m = /^#([0-9a-f]{6})$/i.exec(raw);
+  if (!m) return [0.6, 0.6, 0.6];
+  const v = parseInt(m[1], 16);
+  return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255];
+}
+
+/* ------------------------------------------------------------- workers */
+// Both heavy jobs live off the main thread. Some embeddings refuse a blob:
+// worker, though, and a blank page is a worse answer than a slow one -- so
+// the same source can also be run here, with a shim that keeps the message
+// plumbing identical. The only thing lost is that a long job now blocks the
+// frame it would otherwise have left alone.
+let inlineWorkers = false;
+
+function spawn(id) {
+  const src = document.getElementById(id).textContent;
+  try {
+    return new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+  } catch (err) {
+    inlineWorkers = true;
+    const host = {
+      onmessage: null, onerror: null,
+      postMessage(message) { Promise.resolve().then(() => dispatch({ data: message })); }
+    };
+    const scope = {
+      postMessage(message) {
+        Promise.resolve().then(() => host.onmessage && host.onmessage({ data: message }));
+      }
+    };
+    // `var onmessage` first, so the source's own assignment to it lands on a
+    // binding this closure can still read. The pieces are joined with real
+    // newlines because the worker source ends in a line the epilogue must
+    // not run into.
+    const nl = String.fromCharCode(10);
+    const dispatch = new Function("self", [
+      "var onmessage = null;",
+      "var postMessage = function (m) { self.postMessage(m); };",
+      src,
+      "return function (e) { return onmessage(e); };"
+    ].join(nl))(scope);
+    return host;
+  }
+}
+const sortWorker = spawn("sortWorkerSrc");
+const jobWorker = spawn("jobWorkerSrc");
+for (const w of [sortWorker, jobWorker]) {
+  if (w instanceof Worker) {
+    w.onerror = e => say("Worker error: " + (e.message || "failed to start"), true);
+  }
+}
+
+let jobToken = 0;
+const jobs = new Map();
+// One promise per job, with progress reported as it goes. Both long jobs --
+// downloading a tileset and segmenting it -- report the same way, so the
+// progress bar and the banner need no special cases.
+function runJob(message, transfer, onProgress) {
+  const token = ++jobToken;
+  return new Promise((resolve, reject) => {
+    jobs.set(token, { resolve, reject, onProgress });
+    jobWorker.postMessage({ ...message, token }, transfer || []);
+  });
+}
+jobWorker.onmessage = (e) => {
+  const msg = e.data;
+  const job = jobs.get(msg.token);
+  if (!job) return;
+  if (msg.type === "progress") {
+    progress(msg.done, msg.total);
+    if (job.onProgress) job.onProgress(msg);
+  } else if (msg.type === "failed") {
+    jobs.delete(msg.token); progress(null); job.reject(new Error(msg.message));
+  } else {
+    jobs.delete(msg.token); progress(null); job.resolve(msg);
+  }
+};
+
+/* ------------------------------------------------------------- parsing */
+// Byte encodings shared with the writer: scale is (log sigma + 10) * 16 and
+// each quaternion component maps onto 0-255.
+function encodeScale(sigma) {
+  return Math.max(0, Math.min(255, Math.round((Math.log(sigma) + 10) * 16)));
+}
+function defaultGaussians(n, bbox) {
+  const extent = Math.max(bbox.hi[0] - bbox.lo[0], bbox.hi[1] - bbox.lo[1], 1);
+  const byte = encodeScale(extent / 900);
+  const scale = new Uint8Array(n * 3).fill(byte);
+  const rot = new Uint8Array(n * 4);
+  const opacity = new Uint8Array(n).fill(255);
+  for (let i = 0; i < n; i++) {
+    rot[i * 4] = 128; rot[i * 4 + 1] = 128; rot[i * 4 + 2] = 128;
+    rot[i * 4 + 3] = 255;                       // w = 1, identity
+  }
+  return { scale, rot, opacity };
+}
+
+// Bundle v3 keeps positions as float32. v1 and v2 quantised them into the
+// scene bounding box, which cost about a centimetre across a building-sized
+// capture -- invisible in a picture, but enough to blur the thin faces the
+// column rules key on.
+function parseBundle(buffer) {
+  const view = new DataView(buffer);
+  const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 8));
+  if (magic !== "SPLATSEG") throw new Error("Not a .splatseg bundle");
+  const jsonLength = view.getUint32(8, true);
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 12, jsonLength)));
+  const n = header.points;
+  const version = header.version || 1;
+  let at = 12 + jsonLength;
+  const take = (Type, count) => {
+    // slice() copies, which sidesteps the alignment typed arrays demand.
+    const bytes = count * Type.BYTES_PER_ELEMENT;
+    const a = new Type(buffer.slice(at, at + bytes));
+    at += bytes;
+    return a;
+  };
+
+  let position;
+  if (version >= 3) {
+    position = take(Float32Array, n * 3);
+  } else {
+    const quant = take(Uint16Array, n * 3);
+    const { lo, hi } = header.bbox;
+    position = new Float32Array(n * 3);
+    for (let i = 0; i < n * 3; i++) {
+      const k = i % 3;
+      position[i] = lo[k] + (quant[i] / 65535) * (hi[k] - lo[k]);
+    }
+  }
+  const colour = take(Uint8Array, n * 3);
+  const klass = take(Uint8Array, n);
+  const cluster = take(Int32Array, n);
+
+  let scale, rot, opacity;
+  if (version >= 2 && buffer.byteLength >= at + n * 8) {
+    scale = take(Uint8Array, n * 3);
+    rot = take(Uint8Array, n * 4);
+    opacity = take(Uint8Array, n);
+  } else {
+    // An older bundle carries no Gaussian shape; stand in small round ones so
+    // the view still reads, and say so.
+    ({ scale, rot, opacity } = defaultGaussians(n, header.bbox));
+    header.approximate = true;
+  }
+  // A partial export carries the row each splat came from, so edits made here
+  // still address the whole PLY.
+  const sourceIndex = (version >= 3 && header.complete === false &&
+                       buffer.byteLength >= at + n * 4)
+    ? take(Uint32Array, n) : null;
+  return { header, position, colour, klass, cluster, scale, rot, opacity,
+           sourceIndex };
+}
+
+/* --------------------------------------------------- labelled PLY input */
+const PLY_SIZES = {
+  char: 1, uchar: 1, int8: 1, uint8: 1, short: 2, ushort: 2, int16: 2,
+  uint16: 2, int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4,
+  double: 8, float64: 8
+};
+
+function readerFor(type, view) {
+  switch (type) {
+    case "char": case "int8": return (o) => view.getInt8(o);
+    case "uchar": case "uint8": return (o) => view.getUint8(o);
+    case "short": case "int16": return (o) => view.getInt16(o, true);
+    case "ushort": case "uint16": return (o) => view.getUint16(o, true);
+    case "int": case "int32": return (o) => view.getInt32(o, true);
+    case "uint": case "uint32": return (o) => view.getUint32(o, true);
+    case "double": case "float64": return (o) => view.getFloat64(o, true);
+    default: return (o) => view.getFloat32(o, true);
+  }
+}
+
+// Reading a PLY straight off disk saves running the extra export, so the file
+// the toolbox already wrote is enough. An unlabelled 3DGS PLY works too --
+// it just has nothing to inspect until it is segmented.
+function parseLabelledPly(buffer, budget) {
+  const bytes = new Uint8Array(buffer);
+  const probe = new TextDecoder("ascii")
+    .decode(bytes.subarray(0, Math.min(65536, bytes.length)));
+  const marker = "end_header\n";
+  const cut = probe.indexOf(marker);
+  if (cut < 0) throw new Error("no PLY header found in the first 64 KB");
+  const header = probe.slice(0, cut);
+  if (!/format\s+binary_little_endian/.test(header)) {
+    throw new Error("only binary_little_endian PLY is supported");
+  }
+  const countMatch = /element\s+vertex\s+(\d+)/.exec(header);
+  if (!countMatch) throw new Error("no vertex element in the PLY header");
+  const total = parseInt(countMatch[1], 10);
+
+  const fields = {};
+  let stride = 0;
+  for (const line of header.split("\n")) {
+    const m = /^\s*property\s+(\w+)\s+(\w+)\s*$/.exec(line);
+    if (!m) continue;
+    const size = PLY_SIZES[m[1]];
+    if (!size) throw new Error("unsupported PLY property type " + m[1]);
+    fields[m[2]] = { offset: stride, type: m[1] };
+    stride += size;
+  }
+  for (const need of ["x", "y", "z"]) {
+    if (!(need in fields)) throw new Error("PLY has no " + need + " column");
+  }
+
+  const base = cut + marker.length;
+  const view = new DataView(buffer, base);
+  const get = {};
+  for (const k of Object.keys(fields)) get[k] = readerFor(fields[k].type, view);
+  const at = (i, k) => get[k](i * stride + fields[k].offset);
+  const hasClass = "classification" in fields;
+  const hasCluster = "cluster_id" in fields;
+  const hasColour = "f_dc_0" in fields;
+  const hasShape = "scale_0" in fields && "rot_0" in fields;
+  const hasOpacity = "opacity" in fields;
+
+  // Keep everything classified; thin the ground to fit the budget.
+  const keep = [];
+  let ground = 0;
+  if (hasClass) for (let i = 0; i < total; i++) if (at(i, "classification") === 2) ground++;
+  const classified = total - ground;
+  const room = Math.max(budget - classified, 0);
+  const step = ground > room ? Math.ceil(ground / Math.max(room, 1)) : 1;
+  let seen = 0;
+  for (let i = 0; i < total; i++) {
+    if (hasClass && at(i, "classification") === 2) {
+      if (seen++ % step) continue;
+    } else if (!hasClass && total > budget) {
+      if (i % Math.ceil(total / budget)) continue;
+    }
+    keep.push(i);
+  }
+
+  const n = keep.length;
+  const position = new Float32Array(n * 3);
+  const klass = new Uint8Array(n);
+  const cluster = new Int32Array(n).fill(-1);
+  const colour = new Uint8Array(n * 3);
+  const scale = new Uint8Array(n * 3);
+  const rot = new Uint8Array(n * 4);
+  const opacity = new Uint8Array(n);
+  const sourceIndex = n === total ? null : Uint32Array.from(keep);
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let j = 0; j < n; j++) {
+    const i = keep[j];
+    for (let k = 0; k < 3; k++) {
+      const v = at(i, "xyz"[k]);
+      position[j * 3 + k] = v;
+      if (v < lo[k]) lo[k] = v;
+      if (v > hi[k]) hi[k] = v;
+    }
+    if (hasClass) klass[j] = at(i, "classification");
+    if (hasCluster) cluster[j] = at(i, "cluster_id");
+    for (let k = 0; k < 3; k++) {
+      const c = hasColour ? 0.5 + 0.28209479177387814 * at(i, "f_dc_" + k) : 0.55;
+      colour[j * 3 + k] = Math.max(0, Math.min(255, Math.round(c * 255)));
+    }
+    if (hasShape) {
+      for (let k = 0; k < 3; k++) {
+        scale[j * 3 + k] = Math.max(0, Math.min(255,
+          Math.round((at(i, "scale_" + k) + 10) * 16)));
+      }
+      // 3DGS PLY stores rot_0..3 as w, x, y, z; the viewer wants x, y, z, w.
+      const q = [at(i, "rot_1"), at(i, "rot_2"), at(i, "rot_3"), at(i, "rot_0")];
+      const len = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+      for (let k = 0; k < 4; k++) {
+        rot[j * 4 + k] = Math.max(0, Math.min(255,
+          Math.round((q[k] / len) * 127.5 + 127.5)));
+      }
+    }
+    const raw = hasOpacity ? at(i, "opacity") : 6.0;
+    opacity[j] = Math.max(0, Math.min(255,
+      Math.round(255 / (1 + Math.exp(-raw)))));
+  }
+  if (!hasShape) {
+    const stand = defaultGaussians(n, { lo, hi });
+    scale.set(stand.scale); rot.set(stand.rot);
+  }
+
+  const built = {
+    header: {
+      points: n, sourcePoints: total, bbox: { lo, hi }, clusters: [],
+      classCounts: {}, fromPly: true, approximate: !hasShape,
+      complete: n === total, unlabelled: !hasClass
+    },
+    position, colour, klass, cluster, scale, rot, opacity, sourceIndex
+  };
+  return measure(built);
+}
+
+// The cluster table is not stored in a PLY, and after an edit it is stale, so
+// it is measured back from the per-splat labels wherever it is needed.
+function measure(target) {
+  const { position, klass, cluster } = target;
+  const n = target.header.points;
+  const stats = new Map();
+  const counts = {};
+  // Register before naming: a relabelled PLY can arrive carrying codes this
+  // table has never seen, and they must not all read as unclassified.
+  for (let i = 0; i < n; i++) if (!knownClass(klass[i])) ensureClass(klass[i]);
+  for (let i = 0; i < n; i++) {
+    const name = classOf(klass[i]).name.toLowerCase();
+    counts[name] = (counts[name] || 0) + 1;
+    const id = cluster[i];
+    if (id < 0) continue;
+    let e = stats.get(id);
+    if (!e) {
+      e = { id, cls: new Map(), count: 0, lo: [Infinity, Infinity, Infinity],
+            hi: [-Infinity, -Infinity, -Infinity], sum: [0, 0, 0] };
+      stats.set(id, e);
+    }
+    e.count++;
+    e.cls.set(klass[i], (e.cls.get(klass[i]) || 0) + 1);
+    for (let k = 0; k < 3; k++) {
+      const v = position[i * 3 + k];
+      if (v < e.lo[k]) e.lo[k] = v;
+      if (v > e.hi[k]) e.hi[k] = v;
+      e.sum[k] += v;
+    }
+  }
+  target.header.classCounts = counts;
+  target.header.clusters = [...stats.values()].map(e => {
+    let best = 0, bestN = -1;
+    for (const [code, k] of e.cls) if (k > bestN) { bestN = k; best = code; }
+    return {
+      id: e.id, class: best, className: classOf(best).name.toLowerCase(),
+      count: e.count, lo: e.lo, hi: e.hi,
+      centroid: e.sum.map(v => v / e.count),
+      height: e.hi[2] - e.lo[2],
+      width: Math.max(e.hi[0] - e.lo[0], e.hi[1] - e.lo[1])
+    };
+  }).sort((a, b) => a.id - b.id);
+  return target;
+}
+
+/* ------------------------------------------------------------ renderer */
+// Two ways to draw the same data. Splats rasterise each Gaussian as a
+// screen-space ellipse with alpha falloff, which is what the capture actually
+// looks like. Points draw one dot each -- faster, and you can see through the
+// cloud, which is often better for judging a segmentation.
+//
+// Every splat is read from a texture and the draw is driven by an index
+// buffer, so re-sorting back to front costs 4 bytes a splat rather than
+// reshuffling every attribute. Three textures hold the cloud: positions as
+// float32, everything else packed into four unsigned ints, and a byte a splat
+// for the live selection, which is the only part that changes while editing.
+
+const TEX_W = 2048;
+
+const canvas = $("gl");
+const overlay = $("overlay");
+const octx = overlay.getContext("2d");
+const gl = canvas.getContext("webgl2", { antialias: false, alpha: false,
+                                         premultipliedAlpha: false });
+if (!gl) {
+  $("stage").innerHTML =
+    '<p style="color:#e3eaf0;padding:28px;font-size:15px">This viewer needs WebGL2. ' +
+    'Try a current Chrome, Edge, Firefox or Safari.</p>';
+}
+
+const COMMON = `#version 300 es
+precision highp float;
+precision highp int;
+uniform highp sampler2D uSplatP;    // world xyz
+uniform highp usampler2D uSplatA;   // scale+opacity | rotation | colour+class | cluster+1
+uniform highp usampler2D uSelTex;   // 1 where the splat is in the selection
+uniform highp usampler2D uFilterTex;
+uniform int uMode, uSelected, uPickMode, uHasSel;
+uniform float uDim;
+uniform vec3 uClassColour[16];
+uniform vec3 uSelColour;
+uniform float uClassOn[16];
+
+struct Splat {
+  vec3 world;
+  vec3 sigma;
+  vec4 rot;
+  vec3 colour;
+  float alpha;
+  int cluster;
+  int klass;
+  int index;
+  bool visible;
+  bool inCluster;
+  bool picked;
+};
+
+vec3 clusterHue(int id) {
+  float h = fract(float(id) * 0.61803398875);
+  vec3 k = vec3(1.0, 2.0 / 3.0, 1.0 / 3.0);
+  vec3 p = abs(fract(vec3(h) + k) * 6.0 - 3.0);
+  return mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), 0.72) * 0.95;
+}
+
+Splat readSplat(int index) {
+  ivec2 at = ivec2(index % ${TEX_W}, index / ${TEX_W});
+  uvec4 A = texelFetch(uSplatA, at, 0);
+
+  Splat s;
+  s.index = index;
+  s.world = texelFetch(uSplatP, at, 0).xyz;
+
+  vec3 logScale = vec3(float(A.r & 0xffu), float((A.r >> 8) & 0xffu),
+                       float((A.r >> 16) & 0xffu)) / 16.0 - 10.0;
+  s.sigma = exp(logScale);
+  s.alpha = float((A.r >> 24) & 0xffu) / 255.0;
+  s.rot = (vec4(float(A.g & 0xffu), float((A.g >> 8) & 0xffu),
+                float((A.g >> 16) & 0xffu), float((A.g >> 24) & 0xffu))
+           - 127.5) / 127.5;
+  s.colour = vec3(float(A.b & 0xffu), float((A.b >> 8) & 0xffu),
+                  float((A.b >> 16) & 0xffu)) / 255.0;
+  s.klass = int((A.b >> 24) & 0xffu);
+  s.cluster = int(A.a) - 1;
+
+  s.picked = texelFetch(uSelTex, at, 0).r != 0u;
+  s.inCluster = (uSelected >= 0 && s.cluster == uSelected);
+  bool filtered = false;
+  if (s.cluster >= 0) {
+    ivec2 f = ivec2(s.cluster % 1024, s.cluster / 1024);
+    filtered = texelFetch(uFilterTex, f, 0).r == 0u;
+  }
+  s.visible = s.inCluster || (uClassOn[s.klass] > 0.5 && !filtered);
+  return s;
+}
+
+vec4 shade(Splat s) {
+  if (uPickMode == 1) {
+    int v = s.cluster + 1;
+    return vec4(float(v & 255) / 255.0, float((v >> 8) & 255) / 255.0,
+                float((v >> 16) & 255) / 255.0, 1.0);
+  }
+  if (uPickMode == 2) {
+    int v = s.index + 1;
+    return vec4(float(v & 255) / 255.0, float((v >> 8) & 255) / 255.0,
+                float((v >> 16) & 255) / 255.0, 1.0);
+  }
+  vec3 base = uMode == 0 ? uClassColour[s.klass]
+            : uMode == 1 ? (s.cluster < 0 ? vec3(0.28) : clusterHue(s.cluster))
+            : s.colour;
+  bool lit = s.picked || s.inCluster;
+  if ((uHasSel == 1 || uSelected >= 0) && !lit) {
+    base = mix(base, vec3(0.20, 0.23, 0.26), uDim);
+  }
+  if (s.picked) base = mix(base, uSelColour, 0.55);
+  else if (s.inCluster) base = mix(base, vec3(1.0), 0.35);
+  return vec4(base, s.alpha);
+}
+
+mat3 rotationOf(vec4 q) {
+  q = normalize(q);
+  float x = q.x, y = q.y, z = q.z, w = q.w;
+  return mat3(
+    1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y + z * w), 2.0 * (x * z - y * w),
+    2.0 * (x * y - z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z + x * w),
+    2.0 * (x * z + y * w), 2.0 * (y * z - x * w), 1.0 - 2.0 * (x * x + y * y));
+}
+`;
+
+const SPLAT_VERT = COMMON + `
+layout(location=0) in vec2 aCorner;
+layout(location=1) in uint aIndex;
+uniform mat4 uView, uProj;
+uniform vec2 uViewport, uFocal;
+uniform float uSpread;
+out vec4 vColour;
+out vec2 vQuad;
+
+void main() {
+  Splat s = readSplat(int(aIndex));
+  if (!s.visible) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
+
+  vec4 cam = uView * vec4(s.world, 1.0);
+  vec4 clip = uProj * cam;
+  float bound = 1.2 * clip.w;
+  if (clip.z < -bound || abs(clip.x) > bound || abs(clip.y) > bound) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    return;
+  }
+
+  // 3D covariance, then its projection into screen space (EWA splatting).
+  mat3 R = rotationOf(s.rot);
+  mat3 S = mat3(s.sigma.x * uSpread, 0.0, 0.0,
+                0.0, s.sigma.y * uSpread, 0.0,
+                0.0, 0.0, s.sigma.z * uSpread);
+  mat3 M = R * S;
+  mat3 Vrk = M * transpose(M);
+
+  mat3 J = mat3(
+    uFocal.x / cam.z, 0.0, -(uFocal.x * cam.x) / (cam.z * cam.z),
+    0.0, -uFocal.y / cam.z, (uFocal.y * cam.y) / (cam.z * cam.z),
+    0.0, 0.0, 0.0);
+  mat3 T = transpose(mat3(uView)) * J;
+  mat3 cov2d = transpose(T) * Vrk * T;
+
+  // A splat thinner than a pixel would alias, so give it a pixel of floor.
+  float a = cov2d[0][0] + 0.3;
+  float d = cov2d[1][1] + 0.3;
+  float b = cov2d[0][1];
+  float mid = 0.5 * (a + d);
+  float radius = length(vec2(0.5 * (a - d), b));
+  float lambda1 = mid + radius;
+  float lambda2 = mid - radius;
+  if (lambda2 < 0.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
+
+  vec2 major = normalize(vec2(b, lambda1 - a));
+  vec2 axis1 = min(sqrt(2.0 * lambda1), 512.0) * major;
+  vec2 axis2 = min(sqrt(2.0 * lambda2), 512.0) * vec2(major.y, -major.x);
+
+  vColour = shade(s);
+  vQuad = aCorner * 2.0;
+  gl_Position = vec4(
+    clip.xy / clip.w + aCorner.x * 2.0 * axis1 / uViewport
+                     + aCorner.y * 2.0 * axis2 / uViewport,
+    0.0, 1.0);
+}`;
+
+const SPLAT_FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+in vec4 vColour;
+in vec2 vQuad;
+uniform int uPickMode;
+out vec4 frag;
+void main() {
+  float power = -dot(vQuad, vQuad);
+  if (power < -4.0) discard;
+  float alpha = exp(power) * vColour.a;
+  if (uPickMode != 0) {
+    // Picking wants one answer per pixel, not a blend: only the solid core
+    // of a splat counts as a hit.
+    if (alpha < 0.35) discard;
+    frag = vec4(vColour.rgb, 1.0);
+    return;
+  }
+  if (alpha < 0.004) discard;
+  frag = vec4(vColour.rgb * alpha, alpha);   // premultiplied
+}`;
+
+const POINT_VERT = COMMON + `
+layout(location=1) in uint aIndex;
+uniform mat4 uViewProj;
+uniform float uPointScale;
+out vec4 vColour;
+
+void main() {
+  Splat s = readSplat(int(aIndex));
+  if (!s.visible) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+  vec4 clip = uViewProj * vec4(s.world, 1.0);
+  gl_Position = clip;
+  gl_PointSize = clamp(uPointScale * 60.0 / max(clip.w, 0.001), 1.0, 14.0);
+  if (s.inCluster) gl_PointSize *= 1.7;
+  vec4 c = shade(s);
+  vColour = vec4(c.rgb, 1.0);
+}`;
+
+const POINT_FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+in vec4 vColour;
+uniform int uPickMode;
+out vec4 frag;
+void main() {
+  vec2 d = gl_PointCoord * 2.0 - 1.0;
+  float r = dot(d, d);
+  if (r > 1.0) discard;
+  if (uPickMode != 0) { frag = vec4(vColour.rgb, 1.0); return; }
+  frag = vec4(vColour.rgb * (1.0 - 0.25 * r), 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const kind = type === gl.VERTEX_SHADER ? "vertex" : "fragment";
+    throw new Error(kind + " shader: " + gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+
+const UNIFORMS = ["uSplatP", "uSplatA", "uSelTex", "uFilterTex", "uMode",
+                  "uSelected", "uPickMode", "uHasSel", "uDim", "uClassColour",
+                  "uSelColour", "uClassOn", "uView", "uProj", "uViewProj",
+                  "uViewport", "uFocal", "uPointScale", "uSpread"];
+
+function buildProgram(vertSrc, fragSrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vertSrc));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fragSrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    throw new Error("shader link: " + gl.getProgramInfoLog(p));
+  }
+  const u = {};
+  for (const name of UNIFORMS) u[name] = gl.getUniformLocation(p, name);
+  return { program: p, u };
+}
+
+let splatProg, pointProg, vao, cornerBuf, indexBuf;
+let texP, texA, selTex, filterTex, pickFbo, pickTex, pickDepth;
+let scene = null, pointCount = 0, texRows = 1;
+let sel = null;                      // Uint8Array(n), the live selection
+let selCount = 0;
+let filterFlags = new Uint8Array(1024).fill(1);
+
+if (gl) {
+  // float32 textures need no extension in WebGL2, but sampling one with
+  // anything but NEAREST does; texelFetch never filters, so this is fine.
+  splatProg = buildProgram(SPLAT_VERT, SPLAT_FRAG);
+  pointProg = buildProgram(POINT_VERT, POINT_FRAG);
+
+  vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  cornerBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuf);
+  gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  indexBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, indexBuf);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribIPointer(1, 1, gl.UNSIGNED_INT, 0, 0);
+
+  texP = gl.createTexture();
+  texA = gl.createTexture();
+  selTex = gl.createTexture();
+  filterTex = gl.createTexture();
+  pickTex = gl.createTexture();
+  pickDepth = gl.createRenderbuffer();
+  pickFbo = gl.createFramebuffer();
+}
+
+function nearestParams() {
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST],
+                        [gl.TEXTURE_MAG_FILTER, gl.NEAREST],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],
+                        [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) {
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  }
+}
+
+function uploadFilter() {
+  const rows = Math.max(1, Math.ceil(filterFlags.length / 1024));
+  const padded = new Uint8Array(1024 * rows);
+  padded.set(filterFlags);
+  gl.bindTexture(gl.TEXTURE_2D, filterTex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, 1024, rows, 0,
+                gl.RED_INTEGER, gl.UNSIGNED_BYTE, padded);
+  nearestParams();
+}
+
+// The class, cluster and colour of every splat, repacked. Reclassifying
+// rewrites this, which is why it is its own step.
+function packAttributes() {
+  const A = new Uint32Array(TEX_W * texRows * 4);
+  const { colour, klass, cluster, scale, rot, opacity } = scene;
+  for (let i = 0; i < pointCount; i++) {
+    A[i * 4] = scale[i * 3] | (scale[i * 3 + 1] << 8) |
+               (scale[i * 3 + 2] << 16) | (opacity[i] << 24);
+    A[i * 4 + 1] = rot[i * 4] | (rot[i * 4 + 1] << 8) |
+                   (rot[i * 4 + 2] << 16) | (rot[i * 4 + 3] << 24);
+    A[i * 4 + 2] = colour[i * 3] | (colour[i * 3 + 1] << 8) |
+                   (colour[i * 3 + 2] << 16) | (CODE_TO_INDEX[klass[i]] << 24);
+    A[i * 4 + 3] = cluster[i] + 1;
+  }
+  gl.bindTexture(gl.TEXTURE_2D, texA);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32UI, TEX_W, texRows, 0,
+                gl.RGBA_INTEGER, gl.UNSIGNED_INT, A);
+  nearestParams();
+}
+
+function uploadSelection() {
+  const padded = new Uint8Array(TEX_W * texRows);
+  padded.set(sel.subarray(0, Math.min(sel.length, padded.length)));
+  gl.bindTexture(gl.TEXTURE_2D, selTex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, TEX_W, texRows, 0,
+                gl.RED_INTEGER, gl.UNSIGNED_BYTE, padded);
+  nearestParams();
+}
+
+function upload(next) {
+  scene = next;
+  pointCount = scene.header.points;
+  texRows = Math.max(1, Math.ceil(pointCount / TEX_W));
+
+  const P = new Float32Array(TEX_W * texRows * 4);
+  for (let i = 0; i < pointCount; i++) {
+    P[i * 4] = scene.position[i * 3];
+    P[i * 4 + 1] = scene.position[i * 3 + 1];
+    P[i * 4 + 2] = scene.position[i * 3 + 2];
+  }
+  gl.bindTexture(gl.TEXTURE_2D, texP);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, TEX_W, texRows, 0,
+                gl.RGBA, gl.FLOAT, P);
+  nearestParams();
+  packAttributes();
+
+  sel = new Uint8Array(pointCount);
+  selCount = 0;
+  uploadSelection();
+
+  order = new Uint32Array(pointCount);
+  for (let i = 0; i < pointCount; i++) order[i] = i;
+  gl.bindBuffer(gl.ARRAY_BUFFER, indexBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, order, gl.DYNAMIC_DRAW);
+  sortToken = 0; sortPending = false;
+
+  // The worker keeps its own copy of everything it needs: positions for the
+  // depth sort and for region tests, labels so a selection can never pick up
+  // something hidden.
+  const pos = scene.position.slice(), kl = scene.klass.slice();
+  const cl = scene.cluster.slice();
+  sortWorker.postMessage({ cmd: "scene", n: pointCount, pos, klass: kl, cluster: cl },
+                         [pos.buffer, kl.buffer, cl.buffer]);
+}
+
+function pushLabels() {
+  const kl = scene.klass.slice(), cl = scene.cluster.slice();
+  sortWorker.postMessage({ cmd: "classes", klass: kl, cluster: cl },
+                         [kl.buffer, cl.buffer]);
+}
+
+/* ---------------------------------------------------------- depth sort */
+// Alpha blending is order-dependent, so the splats must be drawn far to near.
+// The sort runs in a worker and the newest answer is taken whenever it lands:
+// the view never waits on it, so an orbit stays smooth and the order catches
+// up within a frame or two instead of only re-sorting every couple of degrees.
+let order = null, sortToken = 0, sortPending = false, sortWanted = false;
+
+sortWorker.onmessage = (e) => {
+  const msg = e.data;
+  if (msg.type === "order") {
+    if (msg.token === sortToken) {
+      order = msg.order;
+      gl.bindBuffer(gl.ARRAY_BUFFER, indexBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, order, gl.DYNAMIC_DRAW);
+      invalidate(false);
+    }
+    sortPending = false;
+    if (sortWanted) { sortWanted = false; requestSort(); }
+  } else if (msg.type === "sel") {
+    // Take it even if a newer gesture is already queued: the worker applies
+    // them in order, so this is a real intermediate state, not a stale one.
+    sel = msg.sel;
+    selCount = msg.count;
+    uploadSelection();
+    refreshSelectionUI();
+    invalidate(false);
+    drainRegion();
+  }
+};
+
+function requestSort() {
+  if (!pointCount) return;
+  if (sortPending) { sortWanted = true; return; }
+  sortPending = true;
+  sortToken++;
+  // Camera-space depth is the third row of the view matrix.
+  sortWorker.postMessage({ cmd: "sort", token: sortToken,
+                           a: view[2], b: view[6], c: view[10], d: view[14] });
+}
+
+/* -------------------------------------------------------------- camera */
+const cam = { yaw: -0.75, pitch: 0.55, dist: 120, target: [0, 0, 0] };
+const proj = mat4(), view = mat4(), viewProj = mat4();
+
+function eyePosition() {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  return [
+    cam.target[0] + cam.dist * cp * Math.cos(cam.yaw),
+    cam.target[1] + cam.dist * cp * Math.sin(cam.yaw),
+    cam.target[2] + cam.dist * sp
+  ];
+}
+
+function frameBox(lo, hi) {
+  cam.target = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  cam.dist = Math.max(Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) * 0.95, 4);
+}
+
+/* --------------------------------------------------------------- state */
+let mode = 2, selected = -1, pointScale = 2, dim = 0.8, spread = 1.0;
+let drawMode = "splats";
+let clusters = [], listed = [];
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+  const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    overlay.width = w; overlay.height = h;
+    gl.bindTexture(gl.TEXTURE_2D, pickTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, pickDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pickFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickTex, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, pickDepth);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+}
+
+function setCommonUniforms(prog, pickMode) {
+  const u = prog.u;
+  gl.uniform1i(u.uMode, mode);
+  gl.uniform1i(u.uSelected, selected);
+  gl.uniform1i(u.uPickMode, pickMode);
+  gl.uniform1i(u.uHasSel, selCount > 0 ? 1 : 0);
+  gl.uniform1f(u.uPointScale, pointScale);
+  gl.uniform1f(u.uSpread, spread);
+  gl.uniform1f(u.uDim, dim);
+
+  const bind = (unit, tex, loc) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(loc, unit);
+  };
+  bind(0, texP, u.uSplatP);
+  bind(1, texA, u.uSplatA);
+  bind(2, selTex, u.uSelTex);
+  bind(3, filterTex, u.uFilterTex);
+
+  const palette = new Float32Array(MAX_CLASSES * 3);
+  const on = new Float32Array(MAX_CLASSES);
+  CLASSES.forEach((c, i) => {
+    const rgb = classRgb(c);
+    palette[i * 3] = rgb[0]; palette[i * 3 + 1] = rgb[1]; palette[i * 3 + 2] = rgb[2];
+    on[i] = classOn[i] ? 1 : 0;
+  });
+  gl.uniform3fv(u.uClassColour, palette);
+  gl.uniform1fv(u.uClassOn, on);
+  const s = readToken("--select");
+  gl.uniform3f(u.uSelColour, s[0], s[1], s[2]);
+}
+
+function setCamera() {
+  const aspect = canvas.width / canvas.height;
+  const radius = Math.max(cam.dist, 10);
+  const fovy = 0.85;
+  perspective(proj, fovy, aspect, radius * 0.005, radius * 12);
+  lookAt(view, eyePosition(), cam.target, [0, 0, 1]);
+  multiply(viewProj, proj, view);
+  const fy = canvas.height / (2 * Math.tan(fovy / 2));
+  return [fy, fy];
+}
+
+function drawPass(pickMode) {
+  const focal = setCamera();
+  gl.bindVertexArray(vao);
+  if (drawMode === "splats") {
+    const prog = splatProg;
+    gl.useProgram(prog.program);
+    setCommonUniforms(prog, pickMode);
+    gl.uniformMatrix4fv(prog.u.uView, false, view);
+    gl.uniformMatrix4fv(prog.u.uProj, false, proj);
+    gl.uniform2f(prog.u.uViewport, canvas.width, canvas.height);
+    gl.uniform2f(prog.u.uFocal, focal[0], focal[1]);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribDivisor(0, 0);
+    gl.vertexAttribDivisor(1, 1);
+    if (pickMode) {
+      // Picking wants the nearest splat, not a blend of everything behind it.
+      gl.disable(gl.BLEND);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+    } else {
+      gl.enable(gl.BLEND);
+      gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA,
+                           gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+    }
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, pointCount);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+  } else {
+    const prog = pointProg;
+    gl.useProgram(prog.program);
+    setCommonUniforms(prog, pickMode);
+    gl.uniformMatrix4fv(prog.u.uViewProj, false, viewProj);
+    gl.disableVertexAttribArray(0);
+    gl.vertexAttribDivisor(1, 0);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+    gl.drawArrays(gl.POINTS, 0, pointCount);
+  }
+}
+
+function render() {
+  if (!gl) return;
+  resize();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  const bg = readToken("--viewport");
+  gl.clearColor(bg[0], bg[1], bg[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // Clear even with nothing loaded, so the panel behind the empty state is
+  // the viewport colour rather than whatever the browser last left there.
+  if (scene) drawPass(0);
+}
+
+let frameQueued = false;
+function invalidate(resort) {
+  if (resort) requestSort();
+  if (frameQueued) return;
+  frameQueued = true;
+  requestAnimationFrame(() => { frameQueued = false; render(); });
+}
+
+// One pick pass, read back over a rectangle. Mode 1 encodes the cluster (for
+// a click), mode 2 the splat index (for a visible-surface region select).
+function pickRegion(x, y, w, h, pickMode) {
+  if (!scene) return new Uint8Array(0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pickFbo);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  drawPass(pickMode);
+  const rgba = new Uint8Array(w * h * 4);
+  gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  render();
+  return rgba;
+}
+
+function pick(px, py) {
+  if (!scene) return -1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const x = Math.round(px * dpr), y = Math.round(canvas.height - py * dpr);
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return -1;
+  const rgba = pickRegion(x, y, 1, 1, 1);
+  return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16)) - 1;
+}
+
+/* ------------------------------------------------------------ editing */
+// The viewer cannot write to your disk, so it never rewrites the cloud. It
+// records what changed against the labels it loaded and exports that: runs of
+// splat indices per class, which `splat-tiles relabel` (or the Apply Splat
+// Edits tool) replays onto the PLY. Kilobytes even for an edit touching a
+// million splats, and the PLY stays the single source of truth.
+let origKlass = null, origCluster = null, changedCount = 0;
+const undoStack = [], redoStack = [];
+const MAX_UNDO = 40;
+
+function snapshot() {
+  origKlass = scene.klass.slice();
+  origCluster = scene.cluster.slice();
+  changedCount = 0;
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+
+function selectedIndices() {
+  const out = new Uint32Array(selCount);
+  let k = 0;
+  for (let i = 0; i < pointCount && k < selCount; i++) if (sel[i]) out[k++] = i;
+  return out.subarray(0, k);
+}
+
+function applyEdit(idx, nextK, nextC) {
+  const prevK = new Uint8Array(idx.length);
+  const prevC = new Int32Array(idx.length);
+  for (let j = 0; j < idx.length; j++) {
+    prevK[j] = scene.klass[idx[j]];
+    prevC[j] = scene.cluster[idx[j]];
+  }
+  const entry = { idx: Uint32Array.from(idx), prevK, prevC,
+                  nextK: Uint8Array.from(nextK), nextC: Int32Array.from(nextC) };
+  undoStack.push(entry);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+  writeEdit(entry, false);
+}
+
+function writeEdit(entry, undo) {
+  const k = undo ? entry.prevK : entry.nextK;
+  const c = undo ? entry.prevC : entry.nextC;
+  for (let j = 0; j < entry.idx.length; j++) {
+    scene.klass[entry.idx[j]] = k[j];
+    scene.cluster[entry.idx[j]] = c[j];
+  }
+  afterLabelChange();
+}
+
+function afterLabelChange() {
+  // The diff against the loaded labels is what gets exported, so it is
+  // counted here rather than recomputed every time the selection moves.
+  let n = 0;
+  for (let i = 0; i < pointCount; i++) {
+    if (scene.klass[i] !== origKlass[i] || scene.cluster[i] !== origCluster[i]) n++;
+  }
+  changedCount = n;
+  measure(scene);
+  packAttributes();
+  pushLabels();
+  clusters = scene.header.clusters;
+  buildClasses(scene.header.classCounts);
+  buildAssign();
+  rebuildFilterFlags();
+  applyFilters();
+  refreshSelectionUI();
+  invalidate(false);
+}
+
+function nextClusterId() {
+  let max = -1;
+  for (let i = 0; i < pointCount; i++) if (scene.cluster[i] > max) max = scene.cluster[i];
+  return max + 1;
+}
+
+function assignClass(code) {
+  const idx = selectedIndices();
+  if (!idx.length) return;
+  const nextK = new Uint8Array(idx.length).fill(code);
+  const nextC = new Int32Array(idx.length);
+  for (let j = 0; j < idx.length; j++) nextC[j] = scene.cluster[idx[j]];
+  applyEdit(idx, nextK, nextC);
+  say(`${commas(idx.length)} splats set to ${classOf(code).name.toLowerCase()}.`);
+  setTimeout(hush, 2600);
+}
+
+function assignCluster(mode) {
+  const idx = selectedIndices();
+  if (!idx.length) return;
+  const id = mode === "new" ? nextClusterId()
+                            : (scene.cluster[idx[0]] >= 0 ? scene.cluster[idx[0]]
+                                                          : nextClusterId());
+  const nextK = new Uint8Array(idx.length);
+  const nextC = new Int32Array(idx.length).fill(id);
+  for (let j = 0; j < idx.length; j++) nextK[j] = scene.klass[idx[j]];
+  applyEdit(idx, nextK, nextC);
+  selected = id;
+  select(id, false);
+  say(`${commas(idx.length)} splats are now cluster #${id}.`);
+  setTimeout(hush, 2600);
+}
+
+function toRanges(list) {
+  if (!list.length) return [];
+  const sorted = Uint32Array.from(list).sort();
+  const out = [];
+  let start = sorted[0], prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    const v = sorted[i];
+    if (v === prev) continue;
+    if (v !== prev + 1) { out.push([start, prev + 1]); start = v; }
+    prev = v;
+  }
+  out.push([start, prev + 1]);
+  return out;
+}
+
+function buildEdits() {
+  const map = new Map();
+  const src = scene.sourceIndex;
+  for (let i = 0; i < pointCount; i++) {
+    if (scene.klass[i] === origKlass[i] && scene.cluster[i] === origCluster[i]) continue;
+    const key = scene.klass[i] + ":" + scene.cluster[i];
+    let list = map.get(key);
+    if (!list) { list = []; map.set(key, list); }
+    list.push(src ? src[i] : i);
+  }
+  const assignments = [];
+  for (const [key, list] of map) {
+    const [code, cluster] = key.split(":").map(Number);
+    assignments.push({ class: code, cluster, ranges: toRanges(list) });
+  }
+  const changed = [...map.values()].reduce((s, l) => s + l.length, 0);
+  // A class made here is a bare code in a uint8 column. Its name has to
+  // travel with the edits or it arrives at the toolbox as "class_65".
+  const classes = {};
+  for (const c of CLASSES) if (!c.token) classes[c.code] = c.name.toLowerCase();
+  const document_ = {
+    format: "splatseg-edits", version: 1,
+    splats: scene.header.sourcePoints || pointCount,
+    source: scene.header.name || scene.header.fromTiles || "",
+    assignments
+  };
+  if (Object.keys(classes).length) document_.classes = classes;
+  return { document: document_, changed };
+}
+
+async function saveFile(name, text) {
+  const bytes = new TextEncoder().encode(text);
+  // Published as an Artifact the page can hand the browser a file; opened
+  // from disk a blob link does the same job. A sandboxed frame allows
+  // neither, so there is a copy-out of last resort.
+  try {
+    const dl = window.claude && await window.claude.use("downloads");
+    if (dl) { await dl.save({ filename: name, data: bytes }); return "saved"; }
+  } catch (err) { /* fall through to the link */ }
+  try {
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return "saved";
+  } catch (err) {
+    return "blocked";
+  }
+}
+
+async function exportEdits() {
+  if (!scene || !origKlass) return;
+  const { document: doc, changed } = buildEdits();
+  if (!changed) { say("Nothing has been reclassified yet."); return; }
+  const stem = (scene.header.name || "splatseg").replace(/\.[^.]+$/, "");
+  const name = stem + ".edits.json";
+  const text = JSON.stringify(doc);
+  const how = await saveFile(name, text);
+  if (how === "saved") {
+    const made = doc.classes ? Object.values(doc.classes) : [];
+    say(`Saved <code>${name}</code> &mdash; ${commas(changed)} splats in ` +
+        `${doc.assignments.length} assignment(s)` +
+        (made.length ? `, including the class${made.length === 1 ? "" : "es"} ` +
+                       `<strong>${made.join(", ")}</strong>` : "") +
+        `. Apply it with ` +
+        `<code>splat-tiles relabel &lt;ply&gt; --edits ${name} -o out.ply</code>.`);
+  } else {
+    say("This frame will not let the page hand you a file. " +
+        "Open the viewer from a local file instead, or copy the edits out of " +
+        "the console: they were logged there.", true);
+    console.log(text);
+  }
+}
+
+function refreshSelectionUI() {
+  const el = $("selCount");
+  el.classList.toggle("none", !selCount);
+  el.textContent = selCount ? commas(selCount) + " splats" : "Nothing selected";
+  for (const id of ["newCluster", "mergeCluster", "clearSelBtn"]) {
+    $(id).disabled = !selCount;
+  }
+  for (const b of $("assign").children) {
+    b.disabled = b.id === "newClass" ? CLASSES.length >= MAX_CLASSES : !selCount;
+  }
+  $("undo").disabled = !undoStack.length;
+  $("redo").disabled = !redoStack.length;
+  $("exportEdits").disabled = !changedCount;
+  $("editNote").textContent = changedCount
+    ? `${commas(changedCount)} splats differ from the labels this file was ` +
+      `opened with.`
+    : "";
+}
+
+/* --------------------------------------------------------- selecting */
+let tool = "pick", reach = "volume", brushRadius = 46;
+// What a pick does to the selection already there. Latched, because building
+// a selection out of a dozen columns should not mean holding a key down for
+// the whole job; the modifiers still override it for a single gesture.
+let setop = "replace";
+let selToken = 0, regionBusy = false, regionQueued = null;
+
+function visClassMask() {
+  const m = new Uint8Array(256);
+  for (const c of CLASSES) if (classOn[c.index]) m[c.code] = 1;
+  return m;
+}
+
+function sendRegion(payload) {
+  if (regionBusy) { regionQueued = payload; return; }
+  regionBusy = true;
+  selToken++;
+  sortWorker.postMessage({ ...payload, cmd: payload.cmd || "region",
+                           token: selToken });
+}
+// Keep the newest gesture rather than a backlog of stale ones: while a brush
+// is being dragged the worker is always one step behind, and only the last
+// position matters.
+const drainRegion = () => {
+  regionBusy = false;
+  if (regionQueued) { const p = regionQueued; regionQueued = null; sendRegion(p); }
+};
+
+function regionCommon(mode) {
+  return { viewProj: Float32Array.from(viewProj),
+           width: canvas.clientWidth, height: canvas.clientHeight,
+           visClass: visClassMask(), filter: filterFlags.slice(), mode };
+}
+
+// "Through" takes every splat whose centre falls inside the outline, however
+// deep -- which is what you want when reclassifying a whole column. "Visible"
+// reads the pick buffer instead, so it takes only the splats actually on
+// screen, which is what you want when trimming a surface.
+function selectRegion(kind, shape, mode) {
+  if (reach === "surface") return selectSurface(kind, shape, mode);
+  sendRegion({ kind, ...shape, ...regionCommon(mode) });
+}
+
+function selectSurface(kind, shape, mode) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let x0, y0, x1, y1;
+  if (kind === "circle") {
+    x0 = shape.cx - shape.r; x1 = shape.cx + shape.r;
+    y0 = shape.cy - shape.r; y1 = shape.cy + shape.r;
+  } else {
+    x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity;
+    for (let i = 0; i < shape.poly.length; i += 2) {
+      x0 = Math.min(x0, shape.poly[i]); x1 = Math.max(x1, shape.poly[i]);
+      y0 = Math.min(y0, shape.poly[i + 1]); y1 = Math.max(y1, shape.poly[i + 1]);
+    }
+  }
+  const px = Math.max(0, Math.floor(x0 * dpr));
+  const py = Math.max(0, Math.floor((canvas.clientHeight - y1) * dpr));
+  const pw = Math.min(canvas.width - px, Math.ceil((x1 - x0) * dpr) + 1);
+  const ph = Math.min(canvas.height - py, Math.ceil((y1 - y0) * dpr) + 1);
+  if (pw <= 0 || ph <= 0) return;
+  const rgba = pickRegion(px, py, pw, ph, 2);
+  const seen = new Set();
+  for (let row = 0; row < ph; row++) {
+    for (let col = 0; col < pw; col++) {
+      const o = (row * pw + col) * 4;
+      const id = (rgba[o] | (rgba[o + 1] << 8) | (rgba[o + 2] << 16)) - 1;
+      if (id < 0) continue;
+      if (kind !== "box") {
+        const sx = (px + col) / dpr, sy = canvas.clientHeight - (py + row) / dpr;
+        if (kind === "circle") {
+          if (Math.hypot(sx - shape.cx, sy - shape.cy) > shape.r) continue;
+        } else if (!pointInPoly(sx, sy, shape.poly)) continue;
+      }
+      seen.add(id);
+    }
+  }
+  sendRegion({ cmd: "indices", list: Uint32Array.from(seen), mode });
+}
+
+function pointInPoly(px, py, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 2; i < poly.length; j = i, i += 2) {
+    const xi = poly[i], yi = poly[i + 1], xj = poly[j], yj = poly[j + 1];
+    if ((yi > py) !== (yj > py) &&
+        px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function clearSelection() {
+  sendRegion({ cmd: "clear" });
+}
+
+/* ------------------------------------------------------------ overlay */
+let gesture = null, hoverAt = null;
+
+function drawOverlay() {
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const stroke = getComputedStyle(document.documentElement)
+    .getPropertyValue("--select").trim() || "#17b26a";
+  octx.strokeStyle = stroke;
+  octx.lineWidth = 1.5;
+  octx.setLineDash([5, 4]);
+
+  if (gesture && gesture.kind === "box") {
+    const x = Math.min(gesture.x0, gesture.x1), y = Math.min(gesture.y0, gesture.y1);
+    octx.strokeRect(x, y, Math.abs(gesture.x1 - gesture.x0),
+                    Math.abs(gesture.y1 - gesture.y0));
+  } else if (gesture && gesture.kind === "lasso" && gesture.pts.length >= 4) {
+    octx.beginPath();
+    octx.moveTo(gesture.pts[0], gesture.pts[1]);
+    for (let i = 2; i < gesture.pts.length; i += 2) octx.lineTo(gesture.pts[i], gesture.pts[i + 1]);
+    octx.closePath();
+    octx.stroke();
+  }
+  if (tool === "brush" && hoverAt) {
+    octx.setLineDash([]);
+    octx.beginPath();
+    octx.arc(hoverAt[0], hoverAt[1], brushRadius, 0, Math.PI * 2);
+    octx.stroke();
+  }
+}
+
+/* ------------------------------------------------------------------ UI */
+function buildClasses(counts) {
+  const host = $("classes");
+  host.textContent = "";
+  CLASSES.forEach(c => {
+    const key = c.name.toLowerCase();
+    const n = counts[key] || 0;
+    const b = document.createElement("button");
+    b.className = n ? "cls" : "cls empty";
+    b.setAttribute("aria-pressed", String(!!classOn[c.index]));
+    b.innerHTML = `<span class="dot" style="background:${classCss(c)}"></span>` +
+                  `<span>${c.name}</span>` +
+                  `<span class="n mono num">${n ? commas(n) : ""}</span>`;
+    if (n) {
+      b.addEventListener("click", () => {
+        classOn[c.index] = classOn[c.index] ? 0 : 1;
+        b.setAttribute("aria-pressed", String(!!classOn[c.index]));
+        render();
+      });
+    } else {
+      b.disabled = true;
+      b.title = c.name + ": no splats carry this class in this file";
+    }
+    host.appendChild(b);
+  });
+}
+
+function buildAssign() {
+  const host = $("assign");
+  host.textContent = "";
+  CLASSES.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.disabled = !selCount;
+    b.title = "Set the selection to " + c.name.toLowerCase() +
+              (i < 9 ? "  (" + (i + 1) + ")" : "");
+    b.innerHTML = `<span class="dot" style="background:${classCss(c)}"></span>` +
+                  `<span>${c.name}</span>`;
+    b.addEventListener("click", () => assignClass(c.code));
+    host.appendChild(b);
+  });
+  const add = document.createElement("button");
+  add.type = "button";
+  add.id = "newClass";
+  add.title = "Make a class of your own and put the selection in it";
+  add.disabled = CLASSES.length >= MAX_CLASSES;
+  add.innerHTML = '<span class="dot" style="box-shadow:inset 0 0 0 1.5px var(--ink-faint)"></span>' +
+                  '<span>' + (add.disabled ? "Class limit reached"
+                                           : "New class&hellip;") + '</span>';
+  add.addEventListener("click", openClassDialog);
+  host.appendChild(add);
+}
+
+/* --------------------------------------------------- a class of your own */
+// The four built-ins are what the column rules produce. Anything a capture
+// actually contains -- beams, pipework, formwork -- has to be nameable here,
+// or the only way to record it is to overload "structure".
+function openClassDialog() {
+  const code = nextClassCode();
+  $("classCode").textContent = "code " + code;
+  $("classSwatch").style.background =
+    customColour(CLASSES.filter(c => !c.token).length);
+  $("className").value = "";
+  $("classNote").textContent = selCount
+    ? commas(selCount) + " selected splats will be moved into it."
+    : "Nothing is selected, so this just adds the class.";
+  $("classDlg").showModal();
+  $("className").focus();
+}
+
+function createClass() {
+  const name = $("className").value.trim();
+  if (!name) { $("classNote").textContent = "Give it a name first."; return; }
+  if (CLASSES.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    $("classNote").textContent = "There is already a class called " + name + ".";
+    return;
+  }
+  const entry = ensureClass(nextClassCode(), name);
+  if (!entry) {
+    $("classNote").textContent = "The class table is full at " + MAX_CLASSES + ".";
+    return;
+  }
+  $("classDlg").close();
+  buildAssign();
+  if (selCount) assignClass(entry.code);
+  else { buildClasses((scene && scene.header.classCounts) || {}); invalidate(false); }
+}
+
+$("classCancel").addEventListener("click", () => $("classDlg").close());
+$("classGo").addEventListener("click", createClass);
+$("classForm").addEventListener("submit", e => { e.preventDefault(); createClass(); });
+
+function rebuildFilterFlags() {
+  const maxId = clusters.reduce((m, c) => Math.max(m, c.id), 0);
+  const next = new Uint8Array(Math.max(1024, maxId + 1)).fill(1);
+  filterFlags = next;
+}
+
+function applyFilters() {
+  const minH = parseFloat($("minh").value);
+  const maxW = parseFloat($("maxw").value);
+  filterFlags.fill(1);
+  // These sliders are the column rules, so they only gate columns. Letting
+  // them hide structure too made wide groups -- a 16 m wall, a facade --
+  // vanish with nothing on screen to say why.
+  let hidden = 0;
+  listed = clusters.filter(c => {
+    const isColumn = c.class === 64;
+    const ok = !isColumn || (c.height >= minH && c.width <= maxW);
+    if (!ok) {
+      hidden++;
+      if (c.id >= 0 && c.id < filterFlags.length) filterFlags[c.id] = 0;
+    }
+    return ok;
+  });
+  uploadFilter();
+  listed.sort((a, b) => b.height - a.height);
+  $("hiddenNote").textContent = hidden
+    ? `${hidden} column${hidden === 1 ? "" : "s"} hidden by these limits` : "";
+  drawList();
+  invalidate(false);
+}
+
+function drawList() {
+  const host = $("list");
+  host.textContent = "";
+  $("listCount").textContent = `(${listed.length})`;
+  const frag = document.createDocumentFragment();
+  for (const c of listed) {
+    const cls = classOf(c.class);
+    const b = document.createElement("button");
+    b.className = "item";
+    b.setAttribute("aria-current", String(c.id === selected));
+    b.innerHTML =
+      `<span class="tag" style="background:var(${cls.token})"></span>` +
+      `<span class="id mono">#${c.id}</span>` +
+      `<span class="h mono num">${fmt(c.height)} m</span>` +
+      `<span class="w mono num">${fmt(c.width)} m</span>`;
+    b.addEventListener("click", () => select(c.id, true));
+    frag.appendChild(b);
+  }
+  host.appendChild(frag);
+}
+
+function select(id, frame) {
+  selected = id;
+  const c = clusters.find(x => x.id === id);
+  const ins = $("inspector");
+  if (!c) { ins.hidden = true; drawList(); invalidate(false); return; }
+  const cls = classOf(c.class);
+  ins.hidden = false;
+  $("insDot").style.background = `var(${cls.token})`;
+  $("insTitle").textContent = `${cls.name} #${c.id}`;
+  const anchor = scene.header.crs && scene.header.crs.anchor;
+  $("insSub").textContent = anchor
+    ? `E ${fmt(c.centroid[0] + anchor[0], 2)}  N ${fmt(c.centroid[1] + anchor[1], 2)}`
+    : `x ${fmt(c.centroid[0])}  y ${fmt(c.centroid[1])}`;
+  const rows = [
+    ["Height", `${fmt(c.height)} m`],
+    ["Width", `${fmt(c.width)} m`],
+    ["Slenderness", fmt(c.height / Math.max(c.width, 0.01), 1)],
+    ["Splats", commas(c.count)],
+    ["Base / top", `${fmt(c.lo[2], 1)} / ${fmt(c.hi[2], 1)} m`]
+  ];
+  $("insKv").innerHTML = rows
+    .map(([k, v]) => `<dt>${k}</dt><dd class="mono num">${v}</dd>`).join("");
+  if (frame) frameBox(c.lo.map(v => v - 2), c.hi.map(v => v + 2));
+  drawList();
+  invalidate(true);
+}
+
+function load(next, keepView) {
+  const before = { ...cam, target: cam.target.slice() };
+  registerClassNames(next.header.classNames);
+  clusters = next.header.clusters || [];
+  upload(next);
+  rebuildFilterFlags();
+  uploadFilter();
+  snapshot();
+  buildClasses(next.header.classCounts || {});
+  buildAssign();
+  if (keepView) { Object.assign(cam, before); }
+  else frameBox(next.header.bbox.lo, next.header.bbox.hi);
+  selected = -1;
+  $("inspector").hidden = true;
+
+  $("mPoints").textContent = commas(next.header.points) +
+    (next.header.sourcePoints > next.header.points
+      ? ` of ${commas(next.header.sourcePoints)}` : "");
+  $("mClusters").textContent = commas(clusters.length);
+  const crs = next.header.crs;
+  $("mCrs").textContent = crs && crs.wkid
+    ? `EPSG:${crs.wkid}${crs.vcsWkid ? " + " + crs.vcsWkid : ""}` : "local frame";
+  const bb = next.header.bbox;
+  $("mExtent").textContent =
+    `${fmt(bb.hi[0] - bb.lo[0], 0)} × ${fmt(bb.hi[1] - bb.lo[1], 0)} × ` +
+    `${fmt(bb.hi[2] - bb.lo[2], 0)} m`;
+
+  const heights = clusters.map(c => c.height);
+  const hi = Math.max(4, Math.ceil(Math.max(...heights, 0)));
+  $("minh").max = String(hi);
+  $("empty").hidden = true;
+  $("hint").hidden = false;
+  refreshSelectionUI();
+  applyFilters();
+  invalidate(true);
+}
+
+/* ----------------------------------------------------- pointer input */
+// With a region tool active the left button draws, so orbit moves to the
+// right button and pan to the middle one. In Cluster mode the left button
+// orbits, which is what a viewer normally does.
+let drag = null;
+
+function localPoint(e) {
+  const r = canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+function modeFor(e) {
+  if (e.altKey) return "sub";
+  if (e.shiftKey || e.ctrlKey || e.metaKey) return "add";
+  return setop;
+}
+
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  const [x, y] = localPoint(e);
+  const selecting = tool !== "pick" && e.button === 0;
+  if (selecting) {
+    if (tool === "box") gesture = { kind: "box", x0: x, y0: y, x1: x, y1: y, mode: modeFor(e) };
+    else if (tool === "lasso") gesture = { kind: "lasso", pts: [x, y], mode: modeFor(e) };
+    else {
+      gesture = { kind: "brush", mode: modeFor(e) };
+      if (gesture.mode === "replace") clearSelection();
+      selectRegion("circle", { cx: x, cy: y, r: brushRadius },
+                   gesture.mode === "sub" ? "sub" : "add");
+    }
+    drawOverlay();
+    return;
+  }
+  const pan = e.button === 1 || (tool === "pick" && e.shiftKey);
+  drag = { x: e.clientX, y: e.clientY, pan, moved: 0, button: e.button };
+});
+
+canvas.addEventListener("pointermove", e => {
+  const [x, y] = localPoint(e);
+  if (tool === "brush") { hoverAt = [x, y]; if (!gesture) drawOverlay(); }
+  if (gesture) {
+    if (gesture.kind === "box") { gesture.x1 = x; gesture.y1 = y; }
+    else if (gesture.kind === "lasso") {
+      const n = gesture.pts.length;
+      if (n < 2 || Math.hypot(x - gesture.pts[n - 2], y - gesture.pts[n - 1]) > 3) {
+        gesture.pts.push(x, y);
+      }
+    } else {
+      selectRegion("circle", { cx: x, cy: y, r: brushRadius },
+                   gesture.mode === "sub" ? "sub" : "add");
+    }
+    drawOverlay();
+    return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  drag.moved += Math.abs(dx) + Math.abs(dy);
+  if (drag.pan) {
+    const cp = Math.cos(cam.pitch);
+    const right = [-Math.sin(cam.yaw), Math.cos(cam.yaw), 0];
+    const upv = [-Math.sin(cam.pitch) * Math.cos(cam.yaw),
+                 -Math.sin(cam.pitch) * Math.sin(cam.yaw), cp];
+    const k = cam.dist * 0.0016;
+    for (let i = 0; i < 3; i++) {
+      cam.target[i] -= right[i] * dx * k;
+      cam.target[i] += upv[i] * dy * k;
+    }
+  } else {
+    cam.yaw -= dx * 0.006;
+    cam.pitch = Math.max(-1.5, Math.min(1.5, cam.pitch + dy * 0.006));
+  }
+  invalidate(true);
+});
+
+canvas.addEventListener("pointerup", e => {
+  if (gesture) {
+    const g = gesture;
+    gesture = null;
+    if (g.kind === "box") {
+      const w = Math.abs(g.x1 - g.x0), h = Math.abs(g.y1 - g.y0);
+      if (w >= 3 && h >= 3) {
+        const x = Math.min(g.x0, g.x1), y = Math.min(g.y0, g.y1);
+        selectRegion("box", { poly: Float32Array.from(
+          [x, y, x + w, y, x + w, y + h, x, y + h]) }, g.mode);
+      }
+    } else if (g.kind === "lasso" && g.pts.length >= 8) {
+      selectRegion("lasso", { poly: Float32Array.from(g.pts) }, g.mode);
+    }
+    drawOverlay();
+    return;
+  }
+  const wasClick = drag && drag.moved < 5;
+  drag = null;
+  if (!wasClick || e.button !== 0) return;
+  const [x, y] = localPoint(e);
+  const id = pick(x, y);
+  if (tool === "pick") {
+    select(id >= 0 ? id : -1, false);
+    // Clicking a cluster is also the fastest way to select every splat in it.
+    if (id >= 0) {
+      sendRegion({ cmd: "indices", mode: modeFor(e),
+                   list: indicesOfCluster(id) });
+    } else if (modeFor(e) === "replace") {
+      clearSelection();
+    }
+  }
+});
+
+function indicesOfCluster(id) {
+  const out = [];
+  for (let i = 0; i < pointCount; i++) if (scene.cluster[i] === id) out.push(i);
+  return Uint32Array.from(out);
+}
+
+canvas.addEventListener("pointerleave", () => { hoverAt = null; drawOverlay(); });
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  cam.dist = Math.max(1, Math.min(6000, cam.dist * (e.deltaY > 0 ? 1.12 : 0.89)));
+  invalidate(true);
+}, { passive: false });
+
+window.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea, select")) return;
+  const meta = e.ctrlKey || e.metaKey;
+  if (meta && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    if (e.shiftKey) $("redo").click(); else $("undo").click();
+  } else if (e.key === "Escape") {
+    // Clear what is selected, but leave the latch alone: it was chosen
+    // deliberately, and wanting an empty selection is not wanting to stop
+    // adding to it.
+    if (selCount) clearSelection(); else select(-1, false);
+  } else if (!meta && (e.key === "a" || e.key === "s" || e.key === "r")) {
+    const op = e.key === "a" ? "add" : e.key === "s" ? "sub" : "replace";
+    $("setop").querySelector('[data-op="' + op + '"]').click();
+  } else if (!meta && e.key >= "1" && e.key <= "9" && selCount) {
+    const c = CLASSES[Number(e.key) - 1];
+    if (c) assignClass(c.code);
+  }
+});
+
+/* --------------------------------------------------------- rail wiring */
+buildAssign();
+
+function segButtons(id, apply) {
+  $(id).addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    [...$(id).children].forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    apply(b.dataset);
+  });
+}
+segButtons("mode", d => { mode = Number(d.mode); invalidate(false); });
+segButtons("draw", d => {
+  drawMode = d.draw;
+  $("psizeRow").hidden = drawMode !== "points";
+  $("spreadRow").hidden = drawMode !== "splats";
+  invalidate(true);
+});
+function updateSelHint() {
+  const gesture = tool === "pick" ? "click" : "drag";
+  const what = setop === "add" ? "<strong>adds to</strong> the selection"
+             : setop === "sub" ? "<strong>removes from</strong> the selection"
+             : "starts a new selection";
+  $("selHint").innerHTML =
+    "Each " + gesture + " " + what + ". Hold <kbd>Shift</kbd> to add or " +
+    "<kbd>Alt</kbd> to subtract just once, or latch it with " +
+    "<kbd>R</kbd> <kbd>A</kbd> <kbd>S</kbd>.";
+}
+segButtons("tool", d => {
+  tool = d.tool;
+  $("brushRow").hidden = tool !== "brush";
+  $("reachRow").hidden = tool === "pick";
+  $("hint").innerHTML = tool === "pick"
+    ? "Drag to orbit &middot; Shift-drag or middle-drag to pan &middot; Scroll to zoom &middot; Click a splat to take its cluster"
+    : "Left-drag to select &middot; Right-drag to orbit &middot; Middle-drag to pan &middot; Scroll to zoom";
+  updateSelHint();
+  hoverAt = null;
+  drawOverlay();
+});
+segButtons("setop", d => { setop = d.op; updateSelHint(); });
+segButtons("reach", d => { reach = d.reach; });
+// The rail opens on the Cluster tool, so say what that tool does rather than
+// leaving the drag instructions for a tool that is not active.
+$("tool").querySelector('[data-tool="pick"]').click();
+
+function slider(id, valId, format, apply) {
+  const el = $(id);
+  const show = () => { $(valId).textContent = format(parseFloat(el.value)); };
+  el.addEventListener("input", () => { show(); apply(parseFloat(el.value)); });
+  show();
+}
+slider("spread", "spreadVal", v => fmt(v, 2), v => { spread = v; invalidate(false); });
+slider("psize", "psizeVal", v => fmt(v, 1), v => { pointScale = v; invalidate(false); });
+slider("isolate", "isolateVal", v => fmt(v, 2), v => { dim = v; invalidate(false); });
+slider("brush", "brushVal", v => v.toFixed(0) + " px", v => { brushRadius = v; drawOverlay(); });
+slider("minh", "minhVal", v => fmt(v, 1) + " m", () => applyFilters());
+slider("maxw", "maxwVal", v => fmt(v, 1) + " m", () => applyFilters());
+slider("pMinH", "pMinHVal", v => fmt(v, 1) + " m", () => {});
+slider("pMaxW", "pMaxWVal", v => fmt(v, 1) + " m", () => {});
+slider("pClear", "pClearVal", v => fmt(v, 1) + " m", () => {});
+slider("pCell", "pCellVal", v => fmt(v, 2) + " m", () => {});
+
+$("frame").addEventListener("click", () => select(selected, true));
+$("clearSel").addEventListener("click", () => select(-1, false));
+$("clearSelBtn").addEventListener("click", clearSelection);
+$("newCluster").addEventListener("click", () => assignCluster("new"));
+$("mergeCluster").addEventListener("click", () => assignCluster("merge"));
+$("exportEdits").addEventListener("click", exportEdits);
+$("undo").addEventListener("click", () => {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  redoStack.push(entry);
+  writeEdit(entry, true);
+});
+$("redo").addEventListener("click", () => {
+  const entry = redoStack.pop();
+  if (!entry) return;
+  undoStack.push(entry);
+  writeEdit(entry, false);
+});
+$("statusX").addEventListener("click", hush);
+
+// Clipboard access can be refused in a sandboxed frame; fall back to a
+// selectable field rather than failing silently.
+function copy(text, button, done, rest) {
+  const revert = () => setTimeout(() => { button.textContent = rest; }, 1400);
+  const fallback = () => {
+    const box = document.createElement("textarea");
+    box.value = text;
+    box.style.cssText = "position:fixed;left:-2000px;top:0";
+    document.body.appendChild(box);
+    box.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    box.remove();
+    if (ok) { button.textContent = done; revert(); }
+    else { say("Clipboard blocked here. Ids: <code>" + text + "</code>"); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => { button.textContent = done; revert(); },
+                                             fallback);
+  } else {
+    fallback();
+  }
+}
+$("copyId").addEventListener("click", e =>
+  copy(String(selected), e.target, "Copied", "Copy id"));
+$("copyVisible").addEventListener("click", e =>
+  copy(JSON.stringify(listed.map(c => c.id)), e.target,
+       `Copied ${listed.length} ids`, "Copy listed cluster ids"));
+
+/* -------------------------------------------------------- segmenting */
+$("runSegment").addEventListener("click", async () => {
+  if (!scene || !pointCount) return;
+  const btn = $("runSegment");
+  btn.disabled = true;
+  say("Segmenting " + commas(pointCount) + " splats&hellip;");
+  try {
+    const opts = {
+      planCell: parseFloat($("pCell").value),
+      groundCell: 3.0, groundQuantile: 5.0,
+      minClearance: parseFloat($("pClear").value),
+      maxNormalZ: 0.35, minPlanarity: 0.15,
+      minHeight: parseFloat($("pMinH").value),
+      maxWidth: parseFloat($("pMaxW").value),
+      minSplats: 60
+    };
+    const slim = { header: { points: pointCount }, position: scene.position,
+                   scale: scene.scale, rot: scene.rot };
+    const r = await runJob({ cmd: "segment", scene: slim, opts },
+                           null, m => say("Segmenting: " + m.stage + "&hellip;"));
+    scene.klass = r.classification;
+    scene.cluster = r.clusterId;
+    snapshot();
+    afterLabelChange();
+    select(-1, false);
+    const n = r.notes || {};
+    say(`Segmented: ${n.columns || 0} column(s) from ${n.groups || 0} group(s) ` +
+        `in plan. ` + Object.entries(scene.header.classCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => `${commas(v)} ${k}`).join(", ") + ".");
+  } catch (err) {
+    say("Segmentation failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* --------------------------------------------------- 3D Tiles from URL */
+const dlg = $("urlDlg");
+let probed = null;
+
+$("openUrl").addEventListener("click", () => {
+  $("levelPick").hidden = true;
+  $("urlGo").hidden = true;
+  $("urlProbe").hidden = false;
+  $("urlNote").textContent = "";
+  probed = null;
+  dlg.showModal();
+});
+$("urlCancel").addEventListener("click", () => dlg.close());
+// Enter in the URL field should do the obvious next thing. Without this the
+// form submits, and a method="dialog" form closes the dialog instead.
+$("urlForm").addEventListener("submit", e => {
+  e.preventDefault();
+  ($("urlGo").hidden ? $("urlProbe") : $("urlGo")).click();
+});
+$("urlProbe").addEventListener("click", async () => {
+  const url = $("urlInput").value.trim();
+  if (!url) return;
+  $("urlProbe").disabled = true;
+  $("urlNote").textContent = "Reading the tile tree…";
+  try {
+    probed = await runJob({ cmd: "probe", url }, null,
+                          m => { $("urlNote").textContent =
+                                   `${m.stage}: ${m.done} of ${m.total}`; });
+    const sel = $("levelSel");
+    sel.textContent = "";
+    for (const L of probed.levels) {
+      const o = document.createElement("option");
+      o.value = String(L.level);
+      o.textContent = `Level ${L.level} — ${commas(L.tiles)} tiles` +
+                      (L.finest ? " (full detail)" : "");
+      sel.appendChild(o);
+    }
+    sel.value = String(probed.levels[probed.levels.length - 1].level);
+    $("levelPick").hidden = false;
+    $("urlGo").hidden = false;
+    $("urlProbe").hidden = true;
+    showLevelNote();
+    $("urlNote").innerHTML = probed.hasCrs
+      ? `Placed in EPSG:${probed.wkid || "?"} — coordinates will be real.`
+      : "This tileset declares no <code>ESRI_crs</code>, so it opens in a " +
+        "local frame with no projected coordinates.";
+  } catch (err) {
+    $("urlNote").innerHTML = "Could not read it: " + err.message +
+      (/failed to fetch|networkerror|load failed/i.test(err.message)
+        ? ". If this page is running inside claude.ai, the frame blocks " +
+          "requests to other hosts &mdash; open " +
+          "<code>python/viewer/segment-inspector.html</code> from disk and " +
+          "the same URL will load."
+        : "");
+  } finally {
+    $("urlProbe").disabled = false;
+  }
+});
+function showLevelNote() {
+  const L = probed.levels.find(x => String(x.level) === $("levelSel").value);
+  $("levelNote").textContent = L
+    ? `${commas(L.tiles)} tiles to download. Coarser levels are quicker and ` +
+      `carry fewer splats; the finest is what the toolbox exports.` : "";
+}
+$("levelSel").addEventListener("change", showLevelNote);
+$("urlGo").addEventListener("click", async () => {
+  const level = Number($("levelSel").value);
+  dlg.close();
+  say("Downloading tiles…");
+  try {
+    const r = await runJob({ cmd: "fetch", level }, null,
+                           m => say(`${m.stage}: ${commas(m.done)} of ${commas(m.total)}`));
+    const next = r.scene;
+    next.header.name = "tileset";
+    measure(next);
+    load(next);
+    say(`Decoded ${commas(next.header.points)} splats from ` +
+        `${commas(next.header.tiles)} tiles at level ${level}. ` +
+        `Nothing is classified yet — open <strong>Segment this cloud</strong> ` +
+        `in the rail to run the column rules here in the browser.`);
+  } catch (err) {
+    say("Could not load that tileset: " + err.message, true);
+  }
+});
+
+/* ------------------------------------------------------------ opening */
+const VIEWER_BUDGET = 8000000;
+
+// A class-name sidecar restores the names a relabelled PLY lost -- a PLY has
+// nowhere to keep a string table, so the names live beside it.
+function readClassSidecar(file) {
+  return file.text().then(text => {
+    let doc;
+    try { doc = JSON.parse(text); } catch (err) { return false; }
+    if (!doc || doc.format !== "splatseg-classes") return false;
+    registerClassNames(doc.classes);
+    if (scene) {
+      measure(scene);
+      clusters = scene.header.clusters;
+      buildClasses(scene.header.classCounts);
+      buildAssign();
+      drawList();
+      invalidate(false);
+    }
+    const named = Object.values(doc.classes || {});
+    say(`Named ${named.length} class${named.length === 1 ? "" : "es"} from ` +
+        `<code>${file.name}</code>: ${named.join(", ")}.`);
+    setTimeout(hush, 5000);
+    return true;
+  });
+}
+
+function readFile(file) {
+  const mb = (file.size / 1e6).toFixed(1);
+  say(`Reading <code>${file.name}</code> (${mb} MB)…`);
+  file.arrayBuffer().then(buffer => {
+    // Give the banner a frame to paint before the parse blocks the thread.
+    setTimeout(() => {
+      try {
+        const head = new Uint8Array(buffer, 0, Math.min(8, buffer.byteLength));
+        const tag = String.fromCharCode(...head);
+        const next = tag === "SPLATSEG"
+          ? parseBundle(buffer)
+          : parseLabelledPly(buffer, VIEWER_BUDGET);
+        if (tag === "SPLATSEG") measure(next);
+        next.header.name = file.name;
+        load(next);
+        const src = next.header.fromPly ? "PLY" : "bundle";
+        const dropped = (next.header.sourcePoints || 0) - next.header.points;
+        say(`Loaded ${commas(next.header.points)} splats from the ${src} — ` +
+            `${commas(next.header.clusters.length)} clusters.` +
+            (next.header.unlabelled
+              ? " It carries no classification, so nothing is segmented yet."
+              : "") +
+            (dropped > 0
+              ? ` <strong>${commas(dropped)} splats were left out</strong>; ` +
+                `edits still address the whole file.` : ""), dropped > 0);
+        setTimeout(hush, dropped > 0 ? 10000 : 4500);
+      } catch (err) {
+        say("Could not read <code>" + file.name + "</code>: " + err.message, true);
+      }
+    }, 30);
+  }, err => say("Could not open that file: " + err.message, true));
+}
+// Take the sidecars first, so the cloud they name is already described by
+// the time it loads.
+function openFiles(files) {
+  const list = [...files];
+  const sidecars = list.filter(f => /\.json$/i.test(f.name));
+  const clouds = list.filter(f => !/\.json$/i.test(f.name));
+  Promise.all(sidecars.map(readClassSidecar)).then(() => {
+    if (clouds.length) readFile(clouds[0]);
+  });
+}
+$("pick").addEventListener("change", e => {
+  if (e.target.files.length) openFiles(e.target.files);
+});
+// Listen on the window: a drop onto the rail or the header should work too.
+let dragDepth = 0;
+window.addEventListener("dragenter", e => {
+  e.preventDefault(); dragDepth++; $("drop").classList.add("on");
+});
+window.addEventListener("dragover", e => { e.preventDefault(); });
+window.addEventListener("dragleave", e => {
+  e.preventDefault();
+  if (--dragDepth <= 0) { dragDepth = 0; $("drop").classList.remove("on"); }
+});
+window.addEventListener("drop", e => {
+  e.preventDefault();
+  dragDepth = 0;
+  $("drop").classList.remove("on");
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files.length) openFiles(files);
+});
+window.addEventListener("resize", () => { invalidate(false); drawOverlay(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  invalidate(false); drawOverlay();
+});
+
+$("emptyFile").addEventListener("click", () => $("pick").click());
+$("emptyUrl").addEventListener("click", () => $("openUrl").click());
+
+// Open on an empty viewport. There used to be a synthetic frame here so the
+// controls had something to act on, but it reads as a capture that failed to
+// load rather than as a demo, and every control it enabled was answering
+// about data nobody asked for.
+if (gl) {
+  buildClasses({});
+  buildAssign();
+  refreshSelectionUI();
+  render();
+}
+</script>
