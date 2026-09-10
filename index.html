@@ -1,4 +1,20 @@
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-Gg1TVgzsduGRY65YcmND30WhTl7kjhvV4lrG4WvgdLo=' 'sha256-txMvW9jkwv3asfeui4wMSdPDJbLfFCCctjii026EvOo='; worker-src blob:; child-src blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https: blob: data:; upgrade-insecure-requests">
+<meta name="referrer" content="no-referrer">
 <title>Splat Segment Inspector</title>
+<!-- This page holds a bearer token and GitHub Pages cannot send
+     frame-ancestors (nor can a meta tag carry it), so this is the OWASP
+     fallback: hidden by default, revealed only when not framed. Hiding
+     rather than busting matters because a sandboxed iframe without
+     allow-top-navigation lets the script run but blocks the redirect. -->
+<style id="antiClickjack">body{display:none !important;}</style>
+<script>
+if (self === top) {
+  const guard = document.getElementById("antiClickjack");
+  guard.parentNode.removeChild(guard);
+} else {
+  top.location = self.location;
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -167,6 +183,11 @@ details.step[open] > summary::after { transform: rotate(90deg); }
 }
 .item.ags .h { font-weight: 500; }
 .item.ags .w { font-size: 11px; color: var(--ink-faint); }
+.tag-out {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--warn); border: 1px solid var(--warn); border-radius: 3px;
+  padding: 0 4px; margin-left: 6px; font-weight: 500;
+}
 
 .classes { display: flex; flex-direction: column; gap: 2px; }
 .cls {
@@ -1816,7 +1837,11 @@ let inlineWorkers = false;
 function spawn(id) {
   const src = document.getElementById(id).textContent;
   try {
-    return new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    const blob = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    const worker = new Worker(blob);
+    // The worker has its copy; holding the URL only pins the blob in memory.
+    URL.revokeObjectURL(blob);
+    return worker;
   } catch (err) {
     inlineWorkers = true;
     const host = {
@@ -3684,6 +3709,11 @@ $("runSegment").addEventListener("click", async () => {
 });
 
 /* --------------------------------------------------- 3D Tiles from URL */
+// Declared here rather than beside the rest of the ArcGIS code because the
+// boot path below reads it synchronously, and a `let` further down the same
+// script is still in its temporal dead zone at that point -- which is
+// exactly how the ?tileset= entry point came to throw.
+let agsToken = "";
 const dlg = $("urlDlg");
 let probed = null;
 
@@ -3732,7 +3762,7 @@ $("urlProbe").addEventListener("click", async () => {
     $("urlProbe").hidden = true;
     showLevelNote();
     $("urlNote").innerHTML = probed.hasCrs
-      ? `Placed in EPSG:${probed.wkid || "?"} — coordinates will be real.`
+      ? `Placed in EPSG:${esc(probed.wkid || "?")} — coordinates will be real.`
       : "This tileset declares no <code>ESRI_crs</code>, so it opens in a " +
         "local frame with no projected coordinates.";
   } catch (err) {
@@ -3756,6 +3786,13 @@ function showLevelNote() {
 $("levelSel").addEventListener("change", showLevelNote);
 $("urlGo").addEventListener("click", async () => {
   const level = Number($("levelSel").value);
+  // A download that outlives the token fails on every remaining tile
+  // with a 498 that explains nothing, so say it before rather than after.
+  if (agsToken && agsExpiringSoon()) {
+    say("Your ArcGIS session has about " + agsMinutesLeft() + " minute(s) " +
+        "left, which may not outlast this download. Sign out and back in " +
+        "first if it stops part way.", true);
+  }
   dlg.close();
   say("Downloading tiles…");
   try {
@@ -3888,10 +3925,16 @@ if (gl) {
   // tiles to pull is a real decision, not one a URL should make for you.
   const wanted = agsIsReturn()
     ? null : new URLSearchParams(location.search).get("tileset");
-  if (wanted) {
-    $("openUrl").click();
-    $("urlInput").value = wanted;
-    $("urlProbe").click();
+  if (wanted && /^https?:\/\//i.test(wanted)) {
+    // After the current script, so a restored ArcGIS session is in place.
+    setTimeout(() => {
+      $("openUrl").click();
+      $("urlInput").value = wanted;
+      if (agsSignedIn() && agsTrusted(wanted)) agsToken = ags.token;
+      $("urlProbe").click();
+    }, 0);
+  } else if (wanted) {
+    say("Ignoring a <code>?tileset=</code> that is not an http(s) URL.", true);
   }
 }
 
@@ -3949,6 +3992,43 @@ function agsKeep() {
 
 function agsSignedIn() { return !!ags.token && ags.expires > Date.now(); }
 
+// Esri: "Passing an access token in the HTTP header is generally more secure
+// than including them in the URL query string. Query parameters may be logged
+// in browser history, server logs, or intercepted more easily." /sharing/rest
+// answers the CORS preflight for X-Esri-Authorization, so every portal call
+// goes this way and no token reaches a URL.
+//
+// tiles.arcgis.com is the exception and cannot be fixed from a browser: its
+// OPTIONS response carries no Access-Control-Allow-* headers, so a preflight
+// fails and the request never happens. Tiles keep ?token=, which is why the
+// host it is sent to is checked, why it is redacted everywhere, and why
+// signing out revokes it.
+async function agsFetch(url, options) {
+  const opts = Object.assign({}, options);
+  opts.headers = Object.assign({}, opts.headers,
+    ags.token ? { "X-Esri-Authorization": "Bearer " + ags.token } : {});
+  const response = await fetch(url, opts);
+  const data = await response.json();
+  if (data && data.error) {
+    const code = data.error.code;
+    if (code === 498 || code === 499) {
+      agsSignOut();
+      throw new Error("your ArcGIS session has expired; sign in again");
+    }
+    throw new Error(data.error.message || ("ArcGIS error " + code));
+  }
+  return data;
+}
+
+//: Minutes left before a download is likely to outlive the session.
+const AGS_TIGHT_MS = 5 * 60 * 1000;
+function agsExpiringSoon() {
+  return agsSignedIn() && ags.expires - Date.now() < AGS_TIGHT_MS;
+}
+function agsMinutesLeft() {
+  return Math.max(0, Math.round((ags.expires - Date.now()) / 60000));
+}
+
 // The redirect URI has to match the one registered on the app exactly, and
 // ArcGIS will not accept a query string on it -- so the page address without
 // one is what gets registered, and what is sent.
@@ -3984,8 +4064,10 @@ async function agsSignIn() {
       "address as a redirect URI.";
     return;
   }
-  const verifier = agsRandom(48);
-  const state = agsRandom(12);
+  // RFC 7636 s7.1 wants 256 bits in the verifier; RFC 6749 s10.10, which
+  // s10.12 imports for state, makes 2^-128 a MUST. 32 bytes clears both.
+  const verifier = agsRandom(32);
+  const state = agsRandom(32);
   sessionStorage.setItem(AGS_STORE + "pkce", verifier);
   sessionStorage.setItem(AGS_STORE + "state", state);
   // Anything the page was about to do survives the round trip to the portal.
@@ -4062,11 +4144,36 @@ async function agsHandleRedirect() {
 let agsScope = "mine";
 
 function agsSignOut() {
-  ags.token = null; ags.username = null; ags.expires = 0;
+  // Tell the portal first, while the token is still in hand. A PKCE access
+  // token otherwise stays valid for its full 30 minutes, and one of these
+  // has already been read off a screenshot once.
+  const dying = ags.token;
+  if (dying && ags.clientId) {
+    const body = new URLSearchParams({
+      f: "json", auth_token: dying, client_id: ags.clientId,
+      token_type_hint: "access_token" });
+    // Fire and forget: a failure here must not block signing out locally,
+    // and Esri answers success even for a token it does not recognise.
+    fetch(ags.portal.replace(/\/+$/, "") + "/sharing/rest/oauth2/revokeToken",
+          { method: "POST", body, keepalive: true }).catch(() => {});
+  }
+  ags.token = null; ags.username = null; ags.expires = 0; ags.self = null;
+  agsToken = "";
   sessionStorage.removeItem(AGS_STORE + "session");
   $("agsResults").textContent = "";
   agsPaint();
 }
+
+// Closing the tab should end the session too, not leave a live token behind.
+window.addEventListener("pagehide", () => {
+  if (ags.token && ags.clientId) {
+    const body = new URLSearchParams({
+      f: "json", auth_token: ags.token, client_id: ags.clientId,
+      token_type_hint: "access_token" });
+    navigator.sendBeacon(
+      ags.portal.replace(/\/+$/, "") + "/sharing/rest/oauth2/revokeToken", body);
+  }
+});
 
 /* ------------------------------------------------------------- content */
 // Searching without a scope searches all public content, which is why a word
@@ -4074,14 +4181,47 @@ function agsSignOut() {
 // owner or an org needs both names, and portals/self is where they live.
 async function agsSelf() {
   if (ags.self) return ags.self;
-  const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/portals/self");
+  const base = ags.portal.replace(/\/+$/, "");
+  const url = new URL(base + "/sharing/rest/portals/self");
   url.searchParams.set("f", "json");
-  url.searchParams.set("token", ags.token);
-  const data = await (await fetch(url.href)).json();
-  if (data.error) throw new Error(data.error.message || "could not read the portal");
+  const data = await agsFetch(url.href);
+
+  // Which hosts this page is willing to hand the token to. An item's URL is
+  // written by whoever published the item, and search can reach other
+  // people's items, so "it came back from a search" is not a reason to trust
+  // where it points.
+  const hosts = new Set([new URL(base).hostname.toLowerCase()]);
+  try {
+    const servers = new URL(base + "/sharing/rest/portals/self/servers");
+    servers.searchParams.set("f", "json");
+    const list = await agsFetch(servers.href);
+    for (const s of (list && list.servers) || []) {
+      for (const u of [s.url, s.adminUrl]) {
+        if (u) { try { hosts.add(new URL(u).hostname.toLowerCase()); } catch (e) {} }
+      }
+    }
+  } catch (err) { /* federated servers are an Enterprise thing; optional */ }
+
   ags.self = { orgid: data.id || "",
-               username: (data.user || {}).username || ags.username };
+               username: (data.user || {}).username || ags.username,
+               hosts };
   return ags.self;
+}
+
+// ArcGIS Online spreads one organization across arcgis.com subdomains --
+// tiles.arcgis.com is not the portal host but is the same trust domain.
+// Enterprise gets only what the portal actually named.
+function agsTrusted(url) {
+  let target;
+  try { target = new URL(url); } catch (err) { return false; }
+  if (target.protocol !== "https:") return false;
+  const host = target.hostname.toLowerCase();
+  const portalHost = (() => {
+    try { return new URL(ags.portal).hostname.toLowerCase(); } catch (e) { return ""; }
+  })();
+  if (/(^|\.)arcgis\.com$/.test(portalHost)) return /(^|\.)arcgis\.com$/.test(host);
+  const known = (ags.self && ags.self.hosts) || new Set([portalHost]);
+  return known.has(host);
 }
 
 // A hosted splat layer is item type "3DTiles Service" -- no space, which is
@@ -4089,6 +4229,9 @@ async function agsSelf() {
 // URL check is the belt to that brace, and "3DTiles Package" is excluded on
 // purpose: a .3tz is a download, not something to fetch tiles from.
 const AGS_TYPE = "3DTiles Service";
+//: 100 items a page, and the portal refuses start + num past 10,000. Five
+//: pages is far more splat layers than any organization has.
+const AGS_MAX_PAGES = 5;
 
 function agsUsable(item) {
   const url = String(item.url || "");
@@ -4109,17 +4252,31 @@ async function agsSearch() {
     if (scope === "mine" && me.username) parts.push('owner:"' + me.username + '"');
     else if (scope === "org" && me.orgid) parts.push("orgid:" + me.orgid);
 
-    const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/search");
-    url.searchParams.set("q", parts.join(" AND "));
-    url.searchParams.set("num", "100");
-    url.searchParams.set("sortField", "modified");
-    url.searchParams.set("sortOrder", "desc");
-    url.searchParams.set("f", "json");
-    url.searchParams.set("token", ags.token);
-    const data = await (await fetch(url.href)).json();
-    if (data.error) throw new Error(data.error.message || "search failed");
-    const results = data.results || [];
-    agsPaintResults(results.filter(agsUsable), results.length, scope, terms);
+    // num is capped at 100 and anything larger is silently clamped, so one
+    // call quietly hid everything past the hundredth. Page instead, and stop
+    // well inside the documented start + num <= 10000.
+    const query = parts.join(" AND ");
+    const results = [];
+    let start = 1, total = 0;
+    for (let page = 0; page < AGS_MAX_PAGES; page++) {
+      const url = new URL(ags.portal.replace(/\/+$/, "") + "/sharing/rest/search");
+      url.searchParams.set("q", query);
+      url.searchParams.set("num", "100");
+      url.searchParams.set("start", String(start));
+      url.searchParams.set("sortField", "modified");
+      url.searchParams.set("sortOrder", "desc");
+      url.searchParams.set("f", "json");
+      const data = await agsFetch(url.href);
+      results.push(...(data.results || []));
+      total = data.total || results.length;
+      start = data.nextStart;
+      if (!start || start <= 0) break;
+      $("agsResults").innerHTML =
+        '<p class="note">Searching&hellip; ' + commas(results.length) +
+        " of " + commas(total) + "</p>";
+    }
+    agsPaintResults(results.filter(agsUsable), results.length, scope, terms,
+                    total);
   } catch (err) {
     host.innerHTML = '<p class="note warn">' + esc(err.message) + "</p>";
   }
@@ -4128,7 +4285,7 @@ async function agsSearch() {
 const AGS_WHERE = { mine: "your content", org: "your organization",
                     all: "public content" };
 
-function agsPaintResults(items, total, scope, terms) {
+function agsPaintResults(items, total, scope, terms, matched) {
   const host = $("agsResults");
   host.textContent = "";
   if (!items.length) {
@@ -4142,10 +4299,14 @@ function agsPaintResults(items, total, scope, terms) {
   for (const item of items) {
     const when = item.modified
       ? new Date(item.modified).toISOString().slice(0, 10) : "";
+    const outside = !agsTrusted(agsTilesetUrl(item));
     const b = document.createElement("button");
     b.type = "button";
     b.className = "item ags";
-    b.innerHTML = '<span class="h">' + esc(item.title || item.id) + "</span>" +
+    if (outside) b.title = "Hosted outside your portal; opens without your token";
+    b.innerHTML = '<span class="h">' + esc(item.title || item.id) +
+                  (outside ? ' <span class="tag-out">external</span>' : "") +
+                  "</span>" +
                   '<span class="w mono">' + esc(item.owner || "") +
                   (when ? " &middot; " + when : "") + "</span>";
     b.addEventListener("click", () => agsOpen(item));
@@ -4153,10 +4314,10 @@ function agsPaintResults(items, total, scope, terms) {
   }
   const note = document.createElement("p");
   note.className = "note";
+  const seen = matched || total;
   note.textContent = items.length + " in " + AGS_WHERE[scope] +
-                     (total > items.length
-                      ? " (" + (total - items.length) + " other result(s) hidden)"
-                      : "");
+    (seen > total ? ", from " + commas(total) + " of " + commas(seen) +
+                    " searched" : "");
   host.appendChild(note);
 }
 
@@ -4180,15 +4341,23 @@ function agsOpen(item) {
   if (!base) return;
   $("agsDlg").close();
   $("openUrl").click();
-  // The token stays out of the visible box -- it is a real credential, and
-  // that box ends up in screenshots. It is added when the fetch happens.
   $("urlInput").value = base;
-  agsToken = ags.token;
+  // The token stays out of the visible box -- it is a real credential and
+  // that box ends up in screenshots -- and it is only offered to a host the
+  // portal vouched for. Anything else still opens, just unauthenticated,
+  // which is the right outcome for a public layer somewhere unexpected and
+  // the safe one for an item pointing at a host that wants your token.
+  if (agsTrusted(base)) {
+    agsToken = ags.token;
+  } else {
+    agsToken = "";
+    say("That layer is hosted on <code>" + esc(new URL(base).hostname) +
+        "</code>, which is not part of your portal, so it is being opened " +
+        "without your ArcGIS token.", true);
+  }
   $("urlProbe").click();
 }
 
-// Set only for the moment between picking an item and reading its tree.
-let agsToken = "";
 
 /* ------------------------------------------------------------------- UI */
 function agsPaint() {
